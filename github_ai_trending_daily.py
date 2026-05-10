@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GitHub AI Trending 日报 - Playwright 抓取 -> LLM 过滤 -> 飞书卡片
+GitHub AI Trending 日报 - Playwright 抓取 -> LLM 过滤（一次调用） -> 飞书卡片
 """
 import asyncio
 import json
@@ -26,28 +26,62 @@ def get_token(app_id, app_secret):
     return json.loads(r.stdout)["tenant_access_token"]
 
 
-def llm_filter_ai_repos(repos, api_key, base_url):
-    """用 LLM 批量判断每个 repo 是否为 AI 相关项目"""
-    if not repos:
-        return []
+def extract_json_from_response(raw):
+    """从 LLM 响应内容中提取 JSON，用 brace counting 找配对的 {}"""
+    json_start = raw.rfind('{')
+    if json_start == -1:
+        raise ValueError("No '{' found in response: " + repr(raw[:200]))
 
-    repo_list = "\n".join([
-        f'{i+1}. {r["name"]}\n   DESC: {r["desc"][:150].strip() if r["desc"] else "(no desc)"}'
-        for i, r in enumerate(repos)
-    ])
+    after = raw[json_start:]
+
+    # Try direct parse first
+    try:
+        json.loads(after)
+        return after.strip()
+    except Exception:
+        pass
+
+    # Brace counting：找配对的闭合 }
+    depth = 0
+    for i, ch in enumerate(after):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return after[:i+1].strip()
+
+    raise ValueError("Could not find matching } in: " + repr(after[:200]))
+
+
+def llm_filter_both(daily, weekly, api_key, base_url, llm_model):
+    """一次 LLM 调用同时过滤每日+每周两个批次"""
+    if not daily and not weekly:
+        return [], []
+
+    def make_list_section(label, repos):
+        lines = [f"{label}:"]
+        for i, r in enumerate(repos, 1):
+            desc = r["desc"][:150].strip() if r["desc"] else "(no desc)"
+            lines.append(f"  {i}. {r['name']} - {desc}")
+        return "\n".join(lines)
+
+    daily_section = make_list_section("DAILY_REPOS", daily)
+    weekly_section = make_list_section("WEEKLY_REPOS", weekly)
 
     prompt = (
-        "You are an AI/ML expert. Determine if each GitHub repo is AI/ML/LLM-related.\n\n"
-        f"Repo list:\n{repo_list}\n\n"
-        'Respond with ONLY valid JSON (no markdown, no explanation):\n'
-        '{"ai_repos": [index1, index2, ...]}\n\n'
+        "You are an AI/ML expert. For each repo below, determine if it is AI/ML/LLM-related.\n\n"
+        f"{daily_section}\n\n{weekly_section}\n\n"
+        "Output ONLY valid JSON, no markdown, no explanation, no thinking tags:\n"
+        '{"daily_ai_repos": [daily_index1, ...], "weekly_ai_repos": [weekly_index1, ...]}\n\n'
         "Rules:\n"
         "- Include if related to: LLMs, AI models, ML, deep learning, AI agents, chatbots, "
         "AI frameworks, AI SDKs, AI APIs, AI tools, generative AI, AI inference, fine-tuning, "
         "RLHF, vector DBs, RAG, embeddings, diffusion, AI coding assistants.\n"
         "- Exclude: qBittorrent, maigret (OSINT), chess engines, game emulators, hardware, "
-        "CLI tools without AI.\n"
-        "- Index is 1-based. Return empty list if none are AI-related."
+        "CLI tools without AI, package managers.\n"
+        "- Indexes are 1-based within each section separately.\n"
+        "- Return empty list [] for a section if nothing qualifies."
     )
 
     api_url = base_url + "/chat/completions"
@@ -62,20 +96,19 @@ def llm_filter_ai_repos(repos, api_key, base_url):
             json={
                 "model": llm_model,
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 800,
+                "max_tokens": 2000,
                 "temperature": 0.1,
             },
-            timeout=60,
+            timeout=90,
         )
         resp.raise_for_status()
-        raw = resp.json()["choices"][0]["message"]["content"]
 
-        # MiniMax returns think tags; find last '{"' as JSON start
-        json_start = raw.rfind('{"')
-        if json_start == -1:
-            after = raw.strip()
-        else:
-            after = raw[json_start:].strip()
+        # 正确方式：从 resp.json() 的嵌套结构里取 content
+        raw_content = resp.json()["choices"][0]["message"]["content"]
+        if not raw_content:
+            raise ValueError("Empty content from API")
+
+        after = extract_json_from_response(raw_content)
 
         # Strip markdown code fences
         if after.startswith("```"):
@@ -88,11 +121,17 @@ def llm_filter_ai_repos(repos, api_key, base_url):
                     break
 
         result = json.loads(after)
-        indices = result.get("ai_repos", [])
-        return [repos[i - 1] for i in indices if 1 <= i <= len(repos)]
+        daily_indices = result.get("daily_ai_repos", [])
+        weekly_indices = result.get("weekly_ai_repos", [])
+
+        daily_ai = [daily[i - 1] for i in daily_indices if 1 <= i <= len(daily)]
+        weekly_ai = [weekly[i - 1] for i in weekly_indices if 1 <= i <= len(weekly)]
+
+        return daily_ai, weekly_ai
+
     except Exception as e:
         print(f"LLM filter failed: {e}", file=sys.stderr)
-        return []
+        return [], []
 
 
 async def fetch_trending(url):
@@ -217,18 +256,17 @@ async def main_async():
     feishu = config["channels"]["feishu"]
     receive_id = "<FEISHU_OPEN_ID>"
 
-    # 读取 OpenClaw 默认模型，按 provider 前缀匹配 baseUrl / apiKey
-    primary = config["agents"]["defaults"]["model"]["primary"]  # e.g. "custom/deepseek-v4-pro"
+    primary = config["agents"]["defaults"]["model"]["primary"]
     if "/" in primary:
         provider_name, llm_model = primary.split("/", 1)
     else:
-        provider_name, llm_model = "custom", primary  # fallback
+        provider_name, llm_model = "custom", primary
 
     providers = config["models"]["providers"]
     if provider_name in providers:
         p = providers[provider_name]
     else:
-        p = providers.get("custom", {})  # fallback to custom if provider missing
+        p = providers.get("custom", {})
     api_key = p["apiKey"]
     base_url = p["baseUrl"]
 
@@ -240,13 +278,9 @@ async def main_async():
     weekly = await fetch_trending("https://github.com/trending?since=weekly")
     print(f"   每周: {len(weekly)} repos")
 
-    print("🤖 LLM 过滤 AI 项目（每日）...")
-    daily_ai = llm_filter_ai_repos(daily, api_key, base_url)
-    print(f"   LLM 过滤: 每日 {len(daily_ai)} 个 AI 项目")
-
-    print("🤖 LLM 过滤 AI 项目（每周）...")
-    weekly_ai = llm_filter_ai_repos(weekly, api_key, base_url)
-    print(f"   LLM 过滤: 每周 {len(weekly_ai)} 个 AI 项目")
+    print("🤖 LLM 过滤 AI 项目（一次调用）...")
+    daily_ai, weekly_ai = llm_filter_both(daily, weekly, api_key, base_url, llm_model)
+    print(f"   LLM 过滤: 每日 {len(daily_ai)} 个, 每周 {len(weekly_ai)} 个")
 
     daily_top = topk(daily_ai, 5)
     weekly_top = topk(weekly_ai, 10)
@@ -254,7 +288,7 @@ async def main_async():
     print(f"🏆 每周: {', '.join(x['name'] for x in weekly_top)}")
 
     if not daily_top and not weekly_top:
-        print("⚠️ 未找到AI项目")
+        print("⚠️ 未找到AI项目，使用全部热门备选")
         daily_top = topk(daily, 5)
         weekly_top = topk(weekly, 10)
 
