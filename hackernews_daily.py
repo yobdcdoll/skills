@@ -160,8 +160,8 @@ def extract_json_from_response(raw):
     raise ValueError("Could not find matching } in: " + repr(after[:200]))
 
 
-def llm_summarize(filepath, api_key, base_url, llm_model):
-    """读取本地存档，LLM 批量生成描述"""
+def llm_summarize(filepath, api_key, base_url, llm_model, retries=3, retry_delay=5):
+    """读取本地存档，LLM 批量生成描述（失败自动重试）"""
     with open(filepath) as f:
         raw_content = f.read()
 
@@ -201,40 +201,59 @@ Output ONLY valid JSON，格式如下（不要输出任何其他内容）：
 
     api_url = base_url + "/chat/completions"
 
-    try:
-        resp = requests.post(
-            api_url,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=90,
-        )
-        resp.raise_for_status()
-        raw = resp.json()["choices"][0]["message"]["content"]
-        if not raw:
-            raise ValueError("Empty content from API")
+    import time as _time
 
-        after = extract_json_from_response(raw)
-        if after.startswith("```"):
-            for part in after.split("```"):
-                part = part.strip()
-                if part.startswith("json"):
-                    part = part[4:].strip()
-                if part.startswith("{"):
-                    after = part
-                    break
+    last_err = None
+    for attempt in range(1, retries + 1):
+        if attempt > 1:
+            print(f"   LLM 解读失败，{retry_delay}s 后重试 ({attempt}/{retries})...", file=sys.stderr)
+            _time.sleep(retry_delay)
+        try:
+            resp = requests.post(
+                api_url,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=90,
+            )
+            resp.raise_for_status()
+            raw = resp.json()["choices"][0]["message"]["content"]
+            if not raw:
+                raise ValueError("Empty content from API")
 
-        return json.loads(after)
+            after = extract_json_from_response(raw)
+            if after.startswith("```"):
+                for part in after.split("```"):
+                    part = part.strip()
+                    if part.startswith("json"):
+                        part = part[4:].strip()
+                    if part.startswith("{"):
+                        after = part
+                        break
 
-    except Exception as e:
-        print(f"LLM summarize failed: {e}", file=sys.stderr)
-        return None
+            return json.loads(after)
+
+        except Exception as e:
+            last_err = e
+            print(f"LLM summarize failed (attempt {attempt}): {e}", file=sys.stderr)
+
+    print(f"LLM summarize failed after {retries} attempts: {last_err}", file=sys.stderr)
+    return None
 
 
-def build_card(today_items, weekly_items, today_desc, weekly_desc):
+def build_card(today_items, weekly_items, today_desc, weekly_desc, summary_failed=False):
     today_str = datetime.now(timezone(timedelta(hours=8))).strftime("%Y年%m月%d日")
+
+    # 解读失败时在头部加提示
+    notify_elements = []
+    if summary_failed:
+        notify_elements.append({
+            "tag": "markdown",
+            "content": "⚠️ 本次 AI 解读生成失败，以下仅展示标题与链接。"
+        })
+        notify_elements.append({"tag": "hr"})
 
     def fmt_item(item, i, desc):
         title = item["title"]
@@ -262,7 +281,8 @@ def build_card(today_items, weekly_items, today_desc, weekly_desc):
         desc = weekly_desc[i - 1]["desc"] if weekly_desc and i <= len(weekly_desc) else ""
         weekly_lines.append(fmt_item(item, i, desc))
 
-    elements = [
+    elements = list(notify_elements)
+    elements += [
         {"tag": "markdown", "content": f"📰 **Hacker News 今日 Top**（{today_str}）"},
         {"tag": "markdown", "content": "\n\n─────────\n\n".join(today_lines)},
         {"tag": "hr"},
@@ -342,13 +362,16 @@ def main():
     print("🤖 LLM 生成中文解读...")
     result = llm_summarize(filepath, api_key, base_url, llm_model)
 
+    summary_failed = result is None
     today_desc = result.get("today", []) if result else []
     weekly_desc = result.get("weekly", []) if result else []
 
     print(f"   今日解读: {len(today_desc)} 条, 本周解读: {len(weekly_desc)} 条")
+    if summary_failed:
+        print("   ⚠️ 解读生成失败，将在卡片中加入提示（仅展示标题与链接）", file=sys.stderr)
 
     token = get_token(feishu["appId"], feishu["appSecret"])
-    card = build_card(today[:10], weekly[:15], today_desc, weekly_desc)
+    card = build_card(today[:10], weekly[:15], today_desc, weekly_desc, summary_failed=summary_failed)
     send_card(token, receive_id, card)
 
 

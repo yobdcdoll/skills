@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-GitHub AI Trending 日报 - Playwright 抓取 -> LLM 过滤（一次调用） -> 飞书卡片
+GitHub AI Trending 日报 - requests+html.parser 抓取 -> LLM 过滤（一次调用） -> 飞书卡片
 """
 import asyncio
 import json
+import re
 import subprocess
 import sys
 import requests
 from datetime import datetime
-from playwright.async_api import async_playwright
+from html.parser import HTMLParser
 
 
 def get_config():
@@ -27,21 +28,24 @@ def get_token(app_id, app_secret):
 
 
 def extract_json_from_response(raw):
-    """从 LLM 响应内容中提取 JSON，用 brace counting 找配对的 {}"""
-    json_start = raw.rfind('{')
+    """Extract JSON from LLM response, stripping think/analysis tags."""
+    # Remove think/analyze blocks (various formats)
+    cleaned = re.sub(r'<thinking>[\s\S]*?</thinking>', '', raw, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\[癢[\s\S]*?\]癢', '', cleaned)
+    cleaned = re.sub(r'\[\[[\s\S]*?\]\]', '', cleaned)
+    # Now look for JSON in the cleaned text
+    json_start = cleaned.rfind('{')
     if json_start == -1:
-        raise ValueError("No '{' found in response: " + repr(raw[:200]))
+        raise ValueError("No '{' found after stripping think tags in: " + repr(raw[:300]))
 
-    after = raw[json_start:]
-
-    # Try direct parse first
+    after = cleaned[json_start:]
     try:
         json.loads(after)
         return after.strip()
     except Exception:
         pass
 
-    # Brace counting：找配对的闭合 }
+    # Brace counting: find matching }
     depth = 0
     for i, ch in enumerate(after):
         if ch == "{":
@@ -55,7 +59,6 @@ def extract_json_from_response(raw):
 
 
 def llm_filter_both(daily, weekly, api_key, base_url, llm_model):
-    """一次 LLM 调用同时过滤每日+每周两个批次"""
     if not daily and not weekly:
         return [], []
 
@@ -96,21 +99,17 @@ def llm_filter_both(daily, weekly, api_key, base_url, llm_model):
             json={
                 "model": llm_model,
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 2000,
+                "max_tokens": 16000,
                 "temperature": 0.1,
             },
             timeout=90,
         )
         resp.raise_for_status()
-
-        # 正确方式：从 resp.json() 的嵌套结构里取 content
         raw_content = resp.json()["choices"][0]["message"]["content"]
         if not raw_content:
             raise ValueError("Empty content from API")
 
         after = extract_json_from_response(raw_content)
-
-        # Strip markdown code fences
         if after.startswith("```"):
             for part in after.split("```"):
                 part = part.strip()
@@ -134,42 +133,91 @@ def llm_filter_both(daily, weekly, api_key, base_url, llm_model):
         return [], []
 
 
-async def fetch_trending(url):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage"]
-        )
-        page = await browser.new_page()
-        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-        await page.wait_for_timeout(3000)
-        items = await page.evaluate("""
-() => {
-    const articles = document.querySelectorAll("article.Box-row");
-    const results = [];
-    articles.forEach(el => {
-        const h2 = el.querySelector("h2");
-        if (!h2) return;
-        const a = h2.querySelector("a");
-        if (!a) return;
-        let name = a.textContent.trim().replace(/\\s+/g, " ");
-        let url = "https://github.com" + a.getAttribute("href");
-        if (url.includes("/sponsors/")) return;
-        const starsEl = el.querySelector("a[href*='/stargazers']");
-        let stars = "0";
-        if (starsEl) {
-            const m = starsEl.textContent.trim().replace(/,/g,"").match(/([\\d.]+)/);
-            stars = m ? m[1] : "0";
-        }
-        const descEl = el.querySelector("p");
-        const desc = descEl ? descEl.textContent.trim() : "";
-        results.push({name, url, stars, desc});
-    });
-    return results;
-}
-        """)
-        await browser.close()
-        return items
+class TrendingParser(HTMLParser):
+    """Parse GitHub Trending HTML to extract repo info."""
+    def __init__(self):
+        super().__init__()
+        self.in_article = False
+        self.in_h2 = False
+        self.in_a = False
+        self.in_stars = False
+        self.in_desc = False
+        self.current_text = ""
+        self.current_href = ""
+        self.items = []
+        self.current_item = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs_dict = dict(attrs)
+        cls = attrs_dict.get("class", "")
+        href = attrs_dict.get("href", "")
+
+        if tag == "article" and "Box-row" in cls:
+            self.in_article = True
+            self.current_item = {"name": "", "url": "", "stars": "0", "desc": ""}
+            return
+
+        if not self.in_article:
+            return
+
+        if tag == "h2":
+            self.in_h2 = True
+            self.current_text = ""
+        elif tag == "a":
+            if self.in_h2:
+                self.in_a = True
+                self.current_href = href
+                self.current_text = ""
+            elif "stargazers" in href:
+                self.in_stars = True
+                self.current_text = ""
+        elif tag == "p":
+            if self.in_article and not self.in_h2:
+                self.in_desc = True
+                self.current_text = ""
+
+    def handle_endtag(self, tag):
+        if tag == "article" and self.in_article:
+            if self.current_item and self.current_item.get("name"):
+                self.items.append(self.current_item)
+            self.in_article = False
+            self.current_item = None
+        elif tag == "h2":
+            self.in_h2 = False
+        elif tag == "a":
+            if self.in_a:
+                self.in_a = False
+                if self.current_item and self.current_text.strip():
+                    name = re.sub(r"\s+", " ", self.current_text.strip())
+                    url = "https://github.com" + self.current_href
+                    if "/sponsors/" not in url:
+                        self.current_item["name"] = name
+                        self.current_item["url"] = url
+            elif self.in_stars:
+                self.in_stars = False
+                if self.current_item:
+                    text = self.current_text.strip().replace(",", "")
+                    m = re.match(r"([\d.]+)", text)
+                    self.current_item["stars"] = m.group(1) if m else "0"
+        elif tag == "p" and self.in_desc:
+            self.in_desc = False
+            if self.current_item:
+                self.current_item["desc"] = self.current_text.strip()
+
+    def handle_data(self, data):
+        if self.in_a or self.in_stars or self.in_desc or self.in_h2:
+            self.current_text += data
+
+
+def fetch_trending(url):
+    """Sync fetch using requests + html.parser."""
+    resp = requests.get(url, timeout=15, headers={
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    })
+    resp.raise_for_status()
+    parser = TrendingParser()
+    parser.feed(resp.text)
+    return parser.items
 
 
 def topk(items, n=5):
@@ -251,7 +299,7 @@ def send_card(token, receive_id, card):
     return False
 
 
-async def main_async():
+def main_async():
     config = get_config()
     feishu = config["channels"]["feishu"]
     receive_id = "<FEISHU_OPEN_ID>"
@@ -271,11 +319,11 @@ async def main_async():
     base_url = p["baseUrl"]
 
     print("🌐 抓取 GitHub Trending（每日）...")
-    daily = await fetch_trending("https://github.com/trending")
+    daily = fetch_trending("https://github.com/trending")
     print(f"   每日: {len(daily)} repos")
 
     print("🌐 抓取 GitHub Trending（每周）...")
-    weekly = await fetch_trending("https://github.com/trending?since=weekly")
+    weekly = fetch_trending("https://github.com/trending?since=weekly")
     print(f"   每周: {len(weekly)} repos")
 
     print("🤖 LLM 过滤 AI 项目（一次调用）...")
@@ -298,7 +346,7 @@ async def main_async():
 
 
 def main():
-    asyncio.run(main_async())
+    main_async()
 
 
 if __name__ == "__main__":
