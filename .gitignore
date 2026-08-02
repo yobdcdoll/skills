@@ -2,8 +2,4 @@ __pycache__/
 *.pyc
 *.pyo
 *.egg-info/
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
 *.bak.*
