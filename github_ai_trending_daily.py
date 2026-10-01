@@ -212,7 +212,13 @@ class TrendingParser(HTMLParser):
 def fetch_trending(url):
     """Sync fetch using requests + html.parser."""
     resp = requests.get(url, timeout=15, headers={
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Referer": "https://github.com/",
+        "Cache-Control": "no-cache",
+        "Upgrade-Insecure-Requests": "1",
     })
     resp.raise_for_status()
     parser = TrendingParser()
