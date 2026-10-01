@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<!--
+  可打印空卷模板。用法：
+  - 一个 .page = 一页（A4）。整份卷有两页就写两个 .page。
+  - 把 <div class="q">...</div> 换成你要还原的印刷题目。
+  - 空卷：答案处留白（______ 或 ( )），不要写答案。
+  - 字体优先 CJK：Noto Sans CJK SC / Noto Sans SC。
+  - 渲染：bash scripts/render.sh 本文件.html --outdir . --name 试卷 --long
+-->
+<style>
+  @page { size: A4; margin: 9mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Noto Sans CJK SC","Noto Sans SC",sans-serif; color:#111; margin:0; padding:0; }
+  .page { width:192mm; margin:0 auto; padding:2mm 2mm 0; page-break-after:always; page-break-inside:avoid; }
+  .page:last-child { page-break-after:auto; }
+  /* 屏幕上给页间留空，便于长截图按空白行切分单页 */
+  @media screen { .page { padding-bottom:90px; } }
+  h2, .q, .calc, .train, table.db, .bars, .fruitq, .seq, .fruitans { page-break-inside:avoid; }
+
+  .hdr { display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #111; padding-bottom:4px; margin-bottom:10px; font-size:13px; }
+  h1.title { text-align:center; font-size:19px; margin:6px 0 14px; letter-spacing:2px; }
+  h2 { font-size:16px; margin:16px 0 8px; border-left:6px solid #2b6cb0; padding-left:8px; }
+  .q { margin:8px 0 10px; font-size:14px; line-height:1.9; }
+  .q b { font-weight:600; }
+
+  /* 直接写得数：四列网格 */
+  .calc { display:grid; grid-template-columns:repeat(4,1fr); gap:6px 10px; font-size:14.5px; margin:4px 0 6px; }
+  .calc.w3 { grid-template-columns:repeat(3,1fr); }
+
+  /* 列竖式：横排几道 */
+  .vline { display:flex; gap:28px; flex-wrap:wrap; font-size:14.5px; margin:4px 0; }
+
+  /* 找规律数列 */
+  .seq { font-size:15px; letter-spacing:1px; margin:4px 0; }
+  .paren { display:inline-block; min-width:40px; text-align:center; margin:0 4px; }
+
+  /* 开火车：车厢 + 箭头 */
+  .train { display:flex; align-items:center; gap:2px; margin:6px 0 6px 16px; }
+  .tbox { border:1.6px solid #111; border-radius:3px; padding:2px 8px; font-size:14px; min-width:34px; text-align:center; background:#fff; }
+  .loco { border:1.6px solid #111; border-radius:3px; padding:2px 8px; font-size:13px; }
+  .arrow { font-size:13px; padding:0 3px; color:#333; }
+
+  /* 表格 */
+  table.db { border-collapse:collapse; margin:6px 0 6px 16px; font-size:14px; }
+  table.db td, table.db th { border:1.4px solid #111; padding:4px 16px; text-align:center; }
+  table.db th { background:#f0f0f0; font-weight:600; }
+
+  /* 线段图（条形图） */
+  .bars { margin:6px 0 8px 24px; }
+  .barrow { display:flex; align-items:center; gap:8px; margin:5px 0; }
+  .barlabel { width:66px; font-size:13.5px; text-align:right; }
+  .bar { height:15px; border:1.4px solid #111; background:#fafafa; position:relative; }
+  .bar span { position:absolute; right:6px; top:-2px; font-size:12.5px; }
+  .barnote { font-size:12.5px; color:#444; }
+
+  /* 图形式子（水果/图形竖式） */
+  .fruitq { display:inline-block; text-align:center; margin:0 26px 6px 4px; vertical-align:top; font-size:17px; }
+  .fruitq .line { letter-spacing:3px; }
+  .fruitq .ruler { border-top:1.6px solid #111; margin:2px 0; height:0; }
+  .fruitans { margin-top:16px; font-size:14.5px; }
+
+  /* 填空/答题留白 */
+  .ansbox { display:inline-block; min-width:52px; border-bottom:1.4px solid #333; }
+  .blank { display:inline-block; min-width:34px; border-bottom:1.4px solid #333; text-align:center; margin:0 3px; }
+  /* 作答/计算留白区：还原原卷的空白，给学生写过程 */
+  .work { min-height:16mm; margin:4px 0 8px; }               /* 通用空白块 */
+  .work.vcalc { min-height:34mm; }                            /* 竖式计算：容下一道完整竖式 */
+  .work.lines { min-height:auto; }
+  .wline { border-bottom:1.4px solid #333; margin:10px 0; }   /* 带横线的作答行 */
+  .em { font-size:19px; }
+</style>
+</head>
+<body>
+
+<!-- ========== 第 1 页 ========== -->
+<div class="page">
+  <div class="hdr">
+    <div>××小学　××年级××练习（第 32 页）</div>
+    <div>班级________　姓名________　学号________</div>
+  </div>
+  <h1 class="title">练 习 卷</h1>
+
+  <h2>一、基础小天地。</h2>
+
+  <div class="q"><b>1. 直接写出得数。</b></div>
+  <div class="calc">
+    <div>35 - 6 = ______</div><div>7 + 73 = ______</div><div>84 - 6 = ______</div><div>57 - 13 = ______</div>
+    <div>52 + 30 = ______</div><div>44 + 9 = ______</div><div>65 + 13 = ______</div><div>82 - 9 = ______</div>
+  </div>
+
+  <div class="q"><b>2. 列竖式计算。</b></div>
+  <div class="vline"><div>74 - 36 = ______</div><div>80 - 34 = ______</div><div>63 + 37 = ______</div></div>
+
+  <div class="q"><b>3. 找规律填数。</b></div>
+  <div class="seq">（1）　92　85　78　<span class="paren">( <span class="ansbox"></span> )</span>、<span class="paren">( <span class="ansbox"></span> )</span>、<span class="paren">( <span class="ansbox"></span> )</span></div>
+
+  <div class="q"><b>4. 开火车。</b></div>
+  <div class="train">
+    <span class="loco">🚂</span>
+    <span class="tbox">72</span><span class="arrow">＋27→</span>
+    <span class="tbox">&nbsp;&nbsp;&nbsp;</span><span class="arrow">－41→</span>
+    <span class="tbox">&nbsp;&nbsp;&nbsp;</span><span class="arrow">－23→</span>
+    <span class="tbox">&nbsp;&nbsp;&nbsp;</span>
+  </div>
+
+  <h2>二、数学与生活。</h2>
+  <div class="q"><b>1. 看线段图列式计算。</b></div>
+  <div class="bars">
+    <div class="barrow"><div class="barlabel">梨树</div>
+      <div class="bar" style="width:250px"><span>43棵</span></div></div>
+    <div class="barrow"><div class="barlabel">苹果树</div>
+      <div class="bar" style="width:130px"><span>? 棵</span></div>
+      <div class="barnote">└── 18棵 ──┘</div></div>
+  </div>
+  <div class="q">算式：____________________________________</div>
+
+  <!-- 注意：不要自行添加页脚/水印/还原说明，原卷没有的都不要加 -->
+</div>
+
+<!-- ========== 第 2 页 ========== -->
+<div class="page">
+  <div class="hdr">
+    <div>××小学　××年级××练习（第 33 页）</div>
+    <div>班级________　姓名________　学号________</div>
+  </div>
+
+  <div class="q"><b>3. 下表是各班捐献图书的情况。</b></div>
+  <table class="db">
+    <tr><th>班级</th><td>1 班</td><td>2 班</td><td>3 班</td><td>4 班</td></tr>
+    <tr><th>数量</th><td>37 本</td><td>38 本</td><td>46 本</td><td>64 本</td></tr>
+  </table>
+
+  <h2>三、融会贯通。</h2>
+  <div class="q"><b>1. 每个算式中的 <span class="em">🍎</span> 和 <span class="em">🍑</span> 各代表几？</b></div>
+  <div class="fruitq">
+    <div class="line"><span class="em">🍎</span>5</div>
+    <div class="line">−&nbsp;<span class="em">🍑</span><span class="em">🍎</span></div>
+    <div class="ruler" style="width:70px"></div>
+    <div class="line">7</div>
+  </div>
+  <div class="fruitq">
+    <div class="line">7&nbsp;<span class="em">🍎</span></div>
+    <div class="line">−&nbsp;<span class="em">🍑</span>6</div>
+    <div class="ruler" style="width:70px"></div>
+    <div class="line">5&nbsp;7</div>
+  </div>
+  <div class="fruitans"><span class="em">🍎</span> = ( <span class="ansbox"></span> )　　<span class="em">🍑</span> = ( <span class="ansbox"></span> )</div>
+
+  <h2>四、勇攀高峰。</h2>
+  <div class="q">小明和小亮共有 24 块积木，小亮从小明那里拿了 4 块后，两人同样多。小明原来有（ <span class="ansbox"></span> ）块，小亮原来有（ <span class="ansbox"></span> ）块。</div>
+
+</div>
+
+</body>
+</html>
