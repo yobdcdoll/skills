@@ -243,6 +243,130 @@ Output ONLY valid JSON，格式如下（不要输出任何其他内容）：
     return None
 
 
+def llm_call(prompt, api_key, base_url, llm_model, retries=3, retry_delay=5, max_tokens=8000):
+    """调用 LLM 一次（带重试），返回清洗后的原始文本，失败返回 None。"""
+    system_prompt = "You are a tech news curator. Output ONLY valid JSON. Do NOT use <think> or </think> tags. Do NOT use markdown fences."
+    payload = {
+        "model": llm_model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": max_tokens,
+        "temperature": 0.1,
+    }
+    if "MiniMax" in llm_model or "minimax" in llm_model.lower():
+        payload["skip"] = ["think"]
+
+    api_url = base_url + "/chat/completions"
+    import time as _time
+
+    last_err = None
+    for attempt in range(1, retries + 1):
+        if attempt > 1:
+            print(f"   LLM 调用失败，{retry_delay}s 后重试 ({attempt}/{retries})...", file=sys.stderr)
+            _time.sleep(retry_delay)
+        try:
+            resp = requests.post(
+                api_url,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=120,
+            )
+            resp.raise_for_status()
+            raw = resp.json()["choices"][0]["message"]["content"]
+            if not raw:
+                raise ValueError("Empty content from API")
+
+            cleaned = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+            if cleaned.startswith("```"):
+                for part in cleaned.split("```"):
+                    part = part.strip()
+                    if part.startswith("json"):
+                        part = part[4:].strip()
+                    if part.startswith("[") or part.startswith("{"):
+                        cleaned = part
+                        break
+            return cleaned
+        except Exception as e:
+            last_err = e
+            print(f"LLM call failed (attempt {attempt}): {e}", file=sys.stderr)
+
+    print(f"LLM call failed after {retries} attempts: {last_err}", file=sys.stderr)
+    return None
+
+
+def parse_desc_list(raw):
+    """把 LLM 输出解析成 [{'desc': ...}] 列表，容忍 JSON 被截断。
+
+    策略：
+    1) 直接 json.loads（兼容 [..] 或 {'today': [..]} 等嵌套结构）；
+    2) 若截断导致解析失败，用正则逐个抢救已完整的 {"desc": "..."} 对象。
+    """
+    if not raw:
+        return None
+
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            for v in data.values():
+                if isinstance(v, list):
+                    data = v
+                    break
+        if isinstance(data, list):
+            out = []
+            for d in data:
+                if isinstance(d, dict):
+                    out.append({"desc": d.get("desc", "")})
+                elif isinstance(d, str):
+                    out.append({"desc": d})
+            if out:
+                return out
+    except Exception:
+        pass
+
+    # 抢救：匹配所有已完整的 {"desc": "..."}（正确处理转义引号）
+    salvaged = []
+    for m in re.finditer(r'\{\s*"desc"\s*:\s*"(?:[^"\\]|\\.)*"\s*\}', raw):
+        try:
+            salvaged.append(json.loads(m.group(0)))
+        except Exception:
+            pass
+    if salvaged:
+        print(f"   ⚠️ JSON 被截断，已抢救出 {len(salvaged)} 条完整解读", file=sys.stderr)
+        return salvaged
+
+    return None
+
+
+def llm_summarize_section(items, section_name, api_key, base_url, llm_model,
+                         retries=3, retry_delay=5, max_tokens=8000):
+    """对单个板块（today / weekly）单独调用 LLM 生成解读，输出扁平 JSON 数组。"""
+    if not items:
+        return []
+
+    lines = []
+    for i, it in enumerate(items, 1):
+        lines.append(f"{i}. {it['title']} | {it['url']} | {it['points']} pts | {it['author']} | {it['created_at']}")
+    body = "\n".join(lines)
+
+    prompt = f"""以下是从 Hacker News 抓取的{section_name}，请为每条生成约100字的中文解读，说明该新闻的背景、意义或值得关注的点。
+
+{body}
+
+Output ONLY a valid JSON array, 条目顺序与上面一一对应，格式如下（不要输出任何其他内容）：
+[
+  {{"desc": "第1条的中文解读，约100字"}},
+  {{"desc": "第2条的中文解读，约100字"}}
+]
+"""
+    raw = llm_call(prompt, api_key, base_url, llm_model, retries, retry_delay, max_tokens)
+    return parse_desc_list(raw)
+
+
 def build_card(today_items, weekly_items, today_desc, weekly_desc, summary_failed=False):
     today_str = datetime.now(timezone(timedelta(hours=8))).strftime("%Y年%m月%d日")
 
@@ -359,16 +483,21 @@ def main():
     api_key = p["apiKey"]
     base_url = p["baseUrl"]
 
-    print("🤖 LLM 生成中文解读...")
-    result = llm_summarize(filepath, api_key, base_url, llm_model)
+    print("🤖 LLM 生成中文解读（拆分：今日 / 本周 各自调用）...")
+    today_desc = llm_summarize_section(today[:10], "今日 Top 新闻", api_key, base_url, llm_model)
+    if today_desc is None:
+        today_desc = []
+    weekly_desc = llm_summarize_section(weekly[:15], "本周 Top 新闻", api_key, base_url, llm_model)
+    if weekly_desc is None:
+        weekly_desc = []
 
-    summary_failed = result is None
-    today_desc = result.get("today", []) if result else []
-    weekly_desc = result.get("weekly", []) if result else []
+    summary_failed = (not today_desc) and (not weekly_desc)
 
     print(f"   今日解读: {len(today_desc)} 条, 本周解读: {len(weekly_desc)} 条")
     if summary_failed:
         print("   ⚠️ 解读生成失败，将在卡片中加入提示（仅展示标题与链接）", file=sys.stderr)
+    elif len(today_desc) < len(today[:10]) or len(weekly_desc) < len(weekly[:15]):
+        print("   ⚠️ 部分解读缺失（JSON 截断已抢救），卡片将展示已有部分", file=sys.stderr)
 
     token = get_token(feishu["appId"], feishu["appSecret"])
     card = build_card(today[:10], weekly[:15], today_desc, weekly_desc, summary_failed=summary_failed)
