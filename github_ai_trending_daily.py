@@ -154,7 +154,8 @@ class TrendingParser(HTMLParser):
 
         if tag == "article" and "Box-row" in cls:
             self.in_article = True
-            self.current_item = {"name": "", "url": "", "stars": "0", "desc": ""}
+            self.current_item = {"name": "", "url": "", "stars": "0", "desc": "",
+                                 "_raw": "", "period": "", "period_label": ""}
             return
 
         if not self.in_article:
@@ -179,6 +180,13 @@ class TrendingParser(HTMLParser):
     def handle_endtag(self, tag):
         if tag == "article" and self.in_article:
             if self.current_item and self.current_item.get("name"):
+                # 解析「本期新增星」：X stars today / X stars this week
+                mm = re.search(r"([\d,\.]+)\s+stars\s+(today|this week)",
+                               self.current_item.get("_raw", ""))
+                if mm:
+                    self.current_item["period"] = mm.group(1).replace(",", "")
+                    self.current_item["period_label"] = mm.group(2)
+                self.current_item.pop("_raw", None)
                 self.items.append(self.current_item)
             self.in_article = False
             self.current_item = None
@@ -207,6 +215,8 @@ class TrendingParser(HTMLParser):
     def handle_data(self, data):
         if self.in_a or self.in_stars or self.in_desc or self.in_h2:
             self.current_text += data
+        if self.in_article and self.current_item is not None:
+            self.current_item["_raw"] = self.current_item.get("_raw", "") + data
 
 
 def fetch_trending(url):
@@ -226,48 +236,73 @@ def fetch_trending(url):
     return parser.items
 
 
-def topk(items, n=5):
-    def sk(x):
-        try:
-            v = x["stars"]
-            return float(v) if "." in v else int(v)
-        except:
+def to_num(s):
+    """把 '32,314' / '3.4k' 之类转成数字，失败返回 0。"""
+    try:
+        s = str(s).replace(",", "").strip()
+        if not s:
             return 0
-    return sorted(items, key=sk, reverse=True)[:n]
+        return float(s) if "." in s else int(s)
+    except Exception:
+        return 0
+
+
+def topk(items, n=5):
+    return sorted(items, key=lambda x: to_num(x.get("stars")), reverse=True)[:n]
+
+
+def rank_items(items, n=10):
+    """按「本期新增星」降序取前 n；若无任何 period 数据则回退按总星排序。
+    返回 (ranked_list, has_period)。"""
+    has_period = any(x.get("period") for x in items)
+    if has_period:
+        ranked = sorted(items, key=lambda x: to_num(x.get("period")), reverse=True)
+    else:
+        ranked = sorted(items, key=lambda x: to_num(x.get("stars")), reverse=True)
+    return ranked[:n], has_period
 
 
 def fmt_stars(s):
     try:
+        s = str(s).replace(",", "")
         v = float(s) if "." in s else int(s)
         if v >= 1000:
             return f"{v/1000:.1f}k"
         return str(int(v))
     except:
-        return s
+        return str(s)
 
 
-def ranked_list(title, items, n=5):
-    top = topk(items, n)
+def ranked_list(title, items, n=10, period_word="今日"):
+    """items 需已排好序；n 重新裁剪以防越界。"""
+    top = items[:n]
     lines = [f"**{title}**", ""]
     for i, x in enumerate(top, 1):
         s = fmt_stars(x["stars"])
         name_link = f'[{x["name"]}]({x["url"]})'
         desc = x["desc"][:100].replace("\n", " ").strip()
-        lines.append(f"**{i}.** {name_link}  ⭐ {s}")
+        head = f"**{i}.** {name_link}  ⭐ {s}"
+        if x.get("period"):
+            head += f" ｜ 🔺 {period_word} +{fmt_stars(x['period'])}"
+        lines.append(head)
         lines.append(f"   {desc}")
         lines.append("")
     return {"tag": "markdown", "content": "\n".join(lines)}
 
 
-def build_card(daily_top, weekly_top):
+def build_card(daily_top, weekly_top, daily_period=True, weekly_period=True):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    daily_title = ("🎯 今日热门 AI 项目 Top10（按今日新增 ⭐ 排序）" if daily_period
+                   else "🎯 今日热门 AI 项目 Top10（按总 ⭐ 排序）")
+    weekly_title = ("📊 本周热门 AI 项目 Top10（按本周新增 ⭐ 排序）" if weekly_period
+                    else "📊 本周热门 AI 项目 Top10（按总 ⭐ 排序）")
     elements = [
         {"tag": "markdown", "content": f"📈 **GitHub AI Trending 日报**（{now}）"},
-        ranked_list("🎯 今日热门 AI 项目 Top5", daily_top, 5),
+        ranked_list(daily_title, daily_top, 10, "今日"),
         {"tag": "hr"},
-        ranked_list("📊 本周热门 AI 项目 Top10", weekly_top, 10),
+        ranked_list(weekly_title, weekly_top, 10, "本周"),
         {"tag": "note", "elements": [
-            {"tag": "plain_text", "content": "由 ArkClaw 自动生成 · 数据来源：github.com/trending"}
+            {"tag": "plain_text", "content": "⭐=累计星 ｜ 🔺=本期新增星（排序依据）· 由 ArkClaw 自动生成 · 数据来源：github.com/trending"}
         ]},
     ]
     return {
@@ -336,18 +371,22 @@ def main_async():
     daily_ai, weekly_ai = llm_filter_both(daily, weekly, api_key, base_url, llm_model)
     print(f"   LLM 过滤: 每日 {len(daily_ai)} 个, 每周 {len(weekly_ai)} 个")
 
-    daily_top = topk(daily_ai, 5)
-    weekly_top = topk(weekly_ai, 10)
-    print(f"🏆 每日: {', '.join(x['name'] for x in daily_top)}")
-    print(f"🏆 每周: {', '.join(x['name'] for x in weekly_top)}")
+    daily_top, daily_period = rank_items(daily_ai, 10)
+    weekly_top, weekly_period = rank_items(weekly_ai, 10)
+    print(f"🏆 每日(按本期新增): {', '.join(x['name'] for x in daily_top)}")
+    print(f"🏆 每周(按本期新增): {', '.join(x['name'] for x in weekly_top)}")
+    if not daily_period:
+        print("⚠️ 每日榜未解析到新增星，回退按总星排序")
+    if not weekly_period:
+        print("⚠️ 每周榜未解析到新增星，回退按总星排序")
 
     if not daily_top and not weekly_top:
         print("⚠️ 未找到AI项目，使用全部热门备选")
-        daily_top = topk(daily, 5)
-        weekly_top = topk(weekly, 10)
+        daily_top, daily_period = rank_items(daily, 10)
+        weekly_top, weekly_period = rank_items(weekly, 10)
 
     token = get_token(feishu["appId"], feishu["appSecret"])
-    card = build_card(daily_top, weekly_top)
+    card = build_card(daily_top, weekly_top, daily_period, weekly_period)
     send_card(token, receive_id, card)
 
 
