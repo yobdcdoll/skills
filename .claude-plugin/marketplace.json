@@ -1,0 +1,36 @@
+{
+  "name": "clawhome",
+  "owner": {
+    "name": "yobdcdoll",
+    "url": "https://github.com/yobdcdoll"
+  },
+  "description": "Clawhome agent skills for exam restoration and GitHub network diagnostics.",
+  "plugins": [
+    {
+      "name": "exam-clean",
+      "source": "./skills/exam-clean",
+      "description": "Restore photographed exams into clean, printable PDFs without handwritten answers.",
+      "category": "productivity",
+      "keywords": [
+        "education",
+        "exam",
+        "ocr",
+        "pdf",
+        "image-processing"
+      ]
+    },
+    {
+      "name": "update-github-hosts",
+      "source": "./skills/update-github-hosts",
+      "description": "Diagnose, update, and verify GitHub IP mappings in macOS /etc/hosts.",
+      "category": "developer-tools",
+      "keywords": [
+        "github",
+        "hosts",
+        "dns",
+        "macos",
+        "networking"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "exam-clean",
+  "version": "1.1.0",
+  "description": "Restore photographed exams into clean, printable PDFs without handwritten answers.",
+  "author": {
+    "name": "yobdcdoll"
+  },
+  "homepage": "https://github.com/yobdcdoll/clawhome",
+  "repository": "https://github.com/yobdcdoll/clawhome",
+  "keywords": [
+    "education",
+    "exam",
+    "ocr",
+    "pdf",
+    "image-processing"
+  ]
+}

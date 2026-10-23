@@ -1,0 +1,17 @@
+{
+  "name": "update-github-hosts",
+  "version": "1.1.0",
+  "description": "Diagnose, update, and verify GitHub IP mappings in macOS /etc/hosts.",
+  "author": {
+    "name": "yobdcdoll"
+  },
+  "homepage": "https://github.com/yobdcdoll/clawhome",
+  "repository": "https://github.com/yobdcdoll/clawhome",
+  "keywords": [
+    "github",
+    "hosts",
+    "dns",
+    "macos",
+    "networking"
+  ]
+}
