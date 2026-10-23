@@ -1,0 +1,3 @@
+interface:
+  display_name: "Update GitHub Hosts"
+  short_description: "Discover, probe, and update GitHub hosts mappings"
