@@ -7,44 +7,23 @@
   "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, and general knowledge-point explainer videos.",
   "plugins": [
     {
-      "name": "exam-clean",
-      "source": "./skills/exam-clean",
-      "description": "Restore photographed exams into clean, printable PDFs without handwritten answers.",
+      "name": "yobdcdoll-skills",
+      "source": "./",
+      "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, and general knowledge-point explainer videos.",
       "category": "productivity",
       "keywords": [
         "education",
         "exam",
         "ocr",
         "pdf",
-        "image-processing"
-      ]
-    },
-    {
-      "name": "update-github-hosts",
-      "source": "./skills/update-github-hosts",
-      "description": "Diagnose, update, and verify GitHub IP mappings in macOS /etc/hosts.",
-      "category": "developer-tools",
-      "keywords": [
         "github",
         "hosts",
         "dns",
-        "macos",
-        "networking"
-      ]
-    },
-    {
-      "name": "gen-knowledge-video",
-      "source": "./skills/gen-knowledge-video",
-      "description": "Turn any knowledge point or skill into a self-study explainer video with narration, cue-aligned visuals, and subtitles.",
-      "category": "productivity",
-      "keywords": [
         "video",
         "teaching",
         "explainer",
         "tts",
-        "edge-tts",
-        "subtitles",
-        "playwright"
+        "subtitles"
       ]
     }
   ]

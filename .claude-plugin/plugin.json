@@ -1,0 +1,30 @@
+{
+  "name": "yobdcdoll-skills",
+  "version": "2.0.0",
+  "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, and general knowledge-point explainer videos.",
+  "author": {
+    "name": "yobdcdoll",
+    "url": "https://github.com/yobdcdoll"
+  },
+  "homepage": "https://github.com/yobdcdoll/skills",
+  "repository": "https://github.com/yobdcdoll/skills",
+  "keywords": [
+    "education",
+    "exam",
+    "ocr",
+    "pdf",
+    "github",
+    "hosts",
+    "dns",
+    "video",
+    "teaching",
+    "explainer",
+    "tts",
+    "subtitles"
+  ],
+  "skills": [
+    "./skills/exam-clean",
+    "./skills/gen-knowledge-video",
+    "./skills/update-github-hosts"
+  ]
+}
