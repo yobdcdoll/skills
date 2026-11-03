@@ -1,10 +1,10 @@
 {
-  "name": "clawhome",
+  "name": "skills",
   "owner": {
     "name": "yobdcdoll"
   },
   "metadata": {
-    "description": "Clawhome agent skills for exam restoration, GitHub network diagnostics, and general knowledge-point explainer videos.",
+    "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, and general knowledge-point explainer videos.",
     "version": "1.2.0"
   },
   "plugins": [
@@ -16,7 +16,7 @@
       "author": {
         "name": "yobdcdoll"
       },
-      "repository": "https://github.com/yobdcdoll/clawhome",
+      "repository": "https://github.com/yobdcdoll/skills",
       "keywords": [
         "education",
         "exam",
@@ -33,7 +33,7 @@
       "author": {
         "name": "yobdcdoll"
       },
-      "repository": "https://github.com/yobdcdoll/clawhome",
+      "repository": "https://github.com/yobdcdoll/skills",
       "keywords": [
         "github",
         "hosts",
@@ -50,7 +50,7 @@
       "author": {
         "name": "yobdcdoll"
       },
-      "repository": "https://github.com/yobdcdoll/clawhome",
+      "repository": "https://github.com/yobdcdoll/skills",
       "keywords": [
         "video",
         "teaching",

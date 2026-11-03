@@ -1,10 +1,10 @@
 {
-  "name": "clawhome",
+  "name": "skills",
   "owner": {
     "name": "yobdcdoll",
     "url": "https://github.com/yobdcdoll"
   },
-  "description": "Clawhome agent skills for exam restoration, GitHub network diagnostics, and general knowledge-point explainer videos.",
+  "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, and general knowledge-point explainer videos.",
   "plugins": [
     {
       "name": "exam-clean",

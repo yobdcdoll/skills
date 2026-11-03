@@ -13,19 +13,19 @@
 ## Claude Code
 
 ```bash
-claude plugin marketplace add yobdcdoll/clawhome
-claude plugin install exam-clean@clawhome
-claude plugin install update-github-hosts@clawhome
-claude plugin install gen-knowledge-video@clawhome
+claude plugin marketplace add yobdcdoll/skills
+claude plugin install exam-clean@skills
+claude plugin install update-github-hosts@skills
+claude plugin install gen-knowledge-video@skills
 ```
 
 ## Codex
 
 ```bash
-codex plugin marketplace add yobdcdoll/clawhome
-codex plugin add exam-clean@clawhome
-codex plugin add update-github-hosts@clawhome
-codex plugin add gen-knowledge-video@clawhome
+codex plugin marketplace add yobdcdoll/skills
+codex plugin add exam-clean@skills
+codex plugin add update-github-hosts@skills
+codex plugin add gen-knowledge-video@skills
 ```
 
 ## Cursor
@@ -34,7 +34,7 @@ Cursor 从仓库根目录的 `.cursor-plugin/marketplace.json` 读取插件目�
 
 1. 打开 Cursor Dashboard 的 **Plugins & MCPs**。
 2. 在 **Team Marketplaces** 中选择 **Add Marketplace**。
-3. 使用 **Import from Repo**，填入 `https://github.com/yobdcdoll/clawhome`。
+3. 使用 **Import from Repo**，填入 `https://github.com/yobdcdoll/skills`。
 4. 在 **Customize** 中安装 `exam-clean`、`update-github-hosts` 或 `gen-knowledge-video`。
 
 Team marketplace 需要 Cursor Teams 或 Enterprise 套餐。公开分发可把同一仓库提交到
