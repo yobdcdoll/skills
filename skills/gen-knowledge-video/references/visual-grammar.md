@@ -1,0 +1,182 @@
+# 画面语法
+
+按知识点类型选择画面原型。原则是：**一屏只讲一件事；用位置表达关系，用颜色表达状态，用数字表达结果。**
+
+## 1. 原型选择表
+
+| 原型 | 适用内容 | 主要节拍 | 避免 |
+| --- | --- | --- | --- |
+| `title` | 开场、章节 | 先给结果/冲突，再给问题 | 一上来放目录 |
+| `definition` | 概念、术语 | 定义逐词出现，关键词最后高亮 | 整段定义一次铺满 |
+| `steps` | 流程、算法、操作 | 容器 → 当前步骤 → 下一步 | 所有步骤同时亮 |
+| `layers` | 结构、组成、层级 | 先外层，再内层，再连线 | 节点一次全出现 |
+| `timeline` | 历史、过程、演化 | 按时间顺序逐个出现 | 时间轴一次画完 |
+| `compare` | 易混概念、方案选择 | 左栏 → 右栏 → 差异高亮 | 两栏同时铺满 |
+| `worked-example` | 数字、演算、推导 | 输入 → 中间量 → 结果 | 只给答案不给过程 |
+| `formula` | 数学、物理、化学 | 公式整体 → 逐项高亮 → 代入 | 公式和解释同时出现 |
+| `map` | 地理、空间、结构 | 底图 → 路径/区域 → 结论 | 用装饰地图代替信息 |
+| `checklist` | 边界、误区、总结 | 逐条出现，最后收束 | 一次列 10 条 |
+| `demo` | 操作技能、工具、实验 | 预录素材按节拍切段 | 实时录屏当正片 |
+| `pronunciation` | 语言学习 | 音标/口型 → 示例词 → 对比 | 只放文字不放音频 |
+
+一张场景可以组合多个原型，但同一屏只保留一个主原型。
+
+## 2. 通用原则
+
+- 当前步骤高亮，其余降级为灰色或低透明度。
+- 元素出现顺序：容器 → 元素 → 连线/关系 → 结论。
+- 动画 0.4–0.8s；不要弹跳、旋转、闪烁。
+- 两个强调色足够；绿色/红色只用于对错结论。
+- 数字必须具体，并且和旁白同一时刻切换。
+- 代码只亮当前行；公式只亮当前项；表格只亮当前行/列。
+- 画面里承诺存在的元素必须真实存在（第 17 个桶、第 5 年、第三阶段）。
+
+## 3. 公式与符号
+
+### 3.1 画面
+
+- 用 KaTeX 或 MathML 渲染，不要用截图。
+- 公式完整出现后，再按旁白逐项高亮；不要一次把所有项都标红。
+- 代入数字时，把符号替换过程单独做一帧或一段，不要跳步。
+- 单位和量纲单独标注，避免只写数字。
+
+```html
+<!-- 最小公式块：完整公式 + 当前项高亮 -->
+<div id="formula" class="formula">
+  A = P<span class="term" id="f-r">(1 + r)</span><sup>n</sup>
+</div>
+<style>
+.formula{font:700 54px/1.40 "Times New Roman","STIX Two Math",serif;}
+.formula .term{padding:0 6px;border-radius:6px;}
+.formula .term.on{background:rgba(37,99,235,.14);color:var(--blue);}
+</style>
+<script>
+function renderFormula(t) {
+  const s = getSeg('how');
+  if (!s) return;
+  const c = i => cue('how', i);
+  document.getElementById('f-r').classList.toggle('on', t - s.start >= c(1));
+}
+</script>
+```
+
+### 3.2 旁白
+
+公式必须念成人话，同时画面保留符号：
+
+| 符号 | 旁白 |
+| --- | --- |
+| `A = P(1+r)^n` | `A 等于 P 乘以 1 加 r 的 n 次方` |
+| `a² + b² = c²` | `a 的平方加 b 的平方等于 c 的平方` |
+| `Δx → 0` | `德尔塔 x 趋近于 0` |
+| `H₂SO₄` | `硫酸`（画面标注化学式） |
+| `∫ f(x) dx` | `f x 对 x 的积分` |
+
+专有名词、单位、缩写第一次出现时念全称；画面里可以保留缩写。
+
+## 4. 技能类与实拍素材
+
+- 默认用图解、表格、公式和数字，不默认真人出镜。
+- 操作技能可以使用手部特写、实物、实验过程；优先自绘或无名素材，避免可识别的真人肖像。
+- 实拍素材只作为**素材**：先录好，再按时间码切段嵌入场景；不要让实拍素材决定正片时间轴。
+- 需要“人”的抽象表达时，用剪影/图标，不要用真人照片。
+
+## 5. 最小片段
+
+下面的 `--white`、`--ink`、`--line`、`--blue`、`--orange`、`--muted`、`--mono` 都来自 `scene-template.html` 的 `:root`。
+
+### 5.1 定义卡
+
+```html
+<div class="card" id="def-card">
+  <div class="k">DEFINITION</div>
+  <div class="t">复利</div>
+  <div class="d">利息也参与生息，本金随时间指数增长。</div>
+</div>
+<style>
+.card{width:1100px;padding:36px 42px;background:var(--white);border:2px solid var(--ink);
+  border-radius:18px;box-shadow:10px 10px 0 rgba(31,41,51,.10);}
+.card .k{font:600 14px/1.2 var(--mono);letter-spacing:.14em;color:var(--muted);}
+.card .t{font-size:52px;font-weight:800;margin-top:12px;}
+.card .d{font-size:28px;line-height:1.6;color:#39424E;margin-top:14px;}
+</style>
+```
+
+### 5.2 步骤条
+
+```html
+<div class="steps" id="steps">
+  <div class="step" id="st0"><b>01</b><span>识别输入</span></div>
+  <div class="step" id="st1"><b>02</b><span>判断状态</span></div>
+  <div class="step" id="st2"><b>03</b><span>处理结果</span></div>
+</div>
+<style>
+.steps{display:flex;gap:24px;}
+.step{width:420px;min-height:180px;padding:24px 28px;background:var(--white);
+  border:1.5px solid var(--line);border-radius:16px;opacity:0;}
+.step b{display:block;font:600 14px/1 var(--mono);color:var(--muted);}
+.step span{display:block;font-size:30px;font-weight:800;margin-top:16px;}
+.step.on{border-color:var(--blue);box-shadow:8px 8px 0 rgba(37,99,235,.12);}
+</style>
+```
+
+### 5.3 对照表
+
+```html
+<table class="compare" id="cmp">
+  <thead><tr><th></th><th>单利</th><th>复利</th></tr></thead>
+  <tbody>
+    <tr id="cmp-1"><td>利息来源</td><td>只有本金</td><td>本金 + 已得利息</td></tr>
+    <tr id="cmp-2"><td>增长形状</td><td>线性</td><td>指数</td></tr>
+  </tbody>
+</table>
+<style>
+.compare{width:1300px;border-collapse:collapse;background:var(--white);border:1.5px solid var(--line);}
+.compare th,.compare td{padding:18px 24px;border-bottom:1px solid var(--line);
+  font-size:24px;text-align:left;}
+.compare th{font:600 14px/1.2 var(--mono);letter-spacing:.12em;color:var(--muted);background:#F1ECE2;}
+.compare tr.on td{background:rgba(37,99,235,.07);color:var(--blue);}
+</style>
+```
+
+### 5.4 计数/结果行
+
+```html
+<div class="row" id="r10"><span>10 年</span><b>19.7 万</b></div>
+<div class="row" id="r20"><span>20 年</span><b>38.7 万</b></div>
+<div class="row" id="r30"><span>30 年</span><b>76.1 万</b></div>
+<style>
+.row{width:900px;display:flex;justify-content:space-between;align-items:baseline;
+  padding:18px 8px;border-bottom:1px dashed var(--line);opacity:0;}
+.row span{font-size:28px;color:var(--muted);}
+.row b{font:800 44px/1 var(--mono);color:var(--ink);}
+.row.hot b{color:var(--orange);}
+</style>
+```
+
+### 5.5 时间线
+
+```html
+<div class="tl" id="tl">
+  <div class="node" id="tl0"><i></i><span>1850</span></div>
+  <div class="node" id="tl1"><i></i><span>1900</span></div>
+  <div class="node" id="tl2"><i></i><span>1950</span></div>
+</div>
+<style>
+.tl{position:relative;display:flex;justify-content:space-between;width:1400px;}
+.tl::before{content:"";position:absolute;left:0;right:0;top:10px;height:2px;background:var(--line);}
+.node{position:relative;width:180px;display:flex;flex-direction:column;align-items:center;gap:14px;opacity:0;}
+.node i{width:20px;height:20px;border-radius:50%;background:var(--white);border:3px solid var(--blue);}
+.node span{font:700 24px/1 var(--mono);}
+</style>
+```
+
+## 6. 常见错误
+
+- 一屏塞两个结论，观众不知道看哪。
+- 所有元素同时出现，旁白还没讲到就剧透。
+- 用颜色表达流程、用位置表达状态，语义和直觉相反。
+- 公式只放截图，无法逐项高亮，也不好改字号。
+- 数字和旁白不同步；旁白说“30 年”，画面还停在 20 年。
+- 实拍素材露脸、有品牌或隐私信息。
+- 动画超过 1 秒，或使用弹跳/闪烁吸引注意。

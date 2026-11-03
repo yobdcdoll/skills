@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Lesson scene template</title>
+<style>
+  :root{
+    --paper:#F7F3EA; --ink:#1F2933; --muted:#6B7280; --line:#D8D0C3;
+    --blue:#2563EB; --orange:#F97316; --green:#16A34A; --red:#DC2626;
+    --white:#FFFDF8;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:var(--paper);
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;color:var(--ink);}
+  #stage{position:relative;width:1920px;height:1080px;overflow:hidden;
+    background:radial-gradient(circle at 18% 8%,rgba(37,99,235,.07),transparent 38%),
+               radial-gradient(circle at 84% 92%,rgba(249,115,22,.07),transparent 40%),var(--paper);}
+  #grid{position:absolute;inset:0;pointer-events:none;
+    background-image:linear-gradient(rgba(31,41,51,.05) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(31,41,51,.05) 1px,transparent 1px);
+    background-size:48px 48px;
+    -webkit-mask-image:linear-gradient(to bottom,transparent,black 15%,black 85%,transparent);
+            mask-image:linear-gradient(to bottom,transparent,black 15%,black 85%,transparent);}
+  #header{position:absolute;top:42px;left:64px;right:64px;display:flex;justify-content:space-between;
+    font-size:16px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;}
+  #header .dot{color:var(--blue);}
+  .scene{position:absolute;inset:0;opacity:0;visibility:hidden;}
+  .scene-title{position:absolute;left:150px;top:180px;font-size:56px;font-weight:800;letter-spacing:-.04em;}
+  .scene-sub{position:absolute;left:156px;top:258px;font-size:26px;color:var(--muted);}
+  .mono{font-family:"SF Mono",Menlo,monospace;}
+
+  /* hook */
+  #hook-title{position:absolute;left:150px;top:290px;font-size:108px;font-weight:800;letter-spacing:-.06em;line-height:.98;}
+  #hook-title span{color:var(--blue);}
+  #hook-sub{position:absolute;left:156px;top:440px;font-size:34px;color:var(--muted);}
+  #hook-chips{position:absolute;left:156px;top:590px;display:flex;gap:16px;}
+  .chip{padding:12px 22px;border:1.5px solid var(--line);border-radius:999px;background:var(--white);
+    font-size:21px;color:var(--muted);opacity:0;}
+  .chip.on{border-color:var(--blue);color:var(--blue);}
+
+  /* define */
+  #def-card{position:absolute;left:150px;top:330px;width:1120px;background:var(--white);
+    border:2px solid var(--ink);border-radius:18px;padding:34px 40px;
+    box-shadow:10px 10px 0 rgba(31,41,51,.10);opacity:0;}
+  #def-card .k{font-family:"SF Mono",Menlo,monospace;font-size:14px;letter-spacing:.14em;color:var(--muted);}
+  #def-card .t{font-size:52px;font-weight:800;margin-top:12px;}
+  #def-card .d{font-size:28px;line-height:1.6;color:#39424E;margin-top:14px;}
+  #def-formula{position:absolute;left:150px;top:690px;padding:20px 28px;background:var(--ink);
+    color:#fff;border-radius:12px;font-family:"SF Mono",Menlo,monospace;font-size:32px;opacity:0;}
+
+  /* example */
+  #ex-input{position:absolute;left:150px;top:320px;font-size:26px;color:var(--muted);opacity:0;}
+  #ex-rows{position:absolute;left:150px;top:400px;width:1100px;}
+  .exrow{display:flex;justify-content:space-between;align-items:baseline;padding:16px 8px;
+    border-bottom:1px dashed var(--line);opacity:0;}
+  .exrow span{font-size:30px;color:var(--muted);}
+  .exrow b{font-family:"SF Mono",Menlo,monospace;font-size:46px;color:var(--ink);}
+  .exrow.hot b{color:var(--orange);}
+  #ex-note{position:absolute;left:150px;top:760px;font-size:28px;color:var(--muted);opacity:0;}
+
+  /* recap */
+  #recap-chips{position:absolute;left:150px;top:320px;display:flex;gap:14px;flex-wrap:wrap;width:1600px;}
+  #recap-checks{position:absolute;left:150px;top:470px;display:flex;gap:20px;}
+  .check{width:500px;background:var(--white);border:1.5px solid var(--line);border-radius:16px;
+    padding:24px 26px;opacity:0;}
+  .check .k{font-family:"SF Mono",Menlo,monospace;font-size:14px;letter-spacing:.12em;color:var(--muted);}
+  .check .t{font-size:24px;font-weight:800;margin-top:10px;}
+  #recap-next{position:absolute;left:150px;bottom:180px;font-size:28px;color:var(--muted);opacity:0;}
+
+  /* subtitle: 允许两行，绝不裁字 */
+  #subtitle{position:absolute;left:50%;bottom:82px;transform:translateX(-50%);max-width:1500px;
+    padding:8px 20px;border-radius:10px;background:rgba(255,253,248,.92);border:1px solid rgba(31,41,51,.12);
+    font-size:26px;line-height:1.4;color:var(--ink);text-align:center;opacity:0;
+    white-space:normal;overflow-wrap:anywhere;}
+  #progress-wrap{position:absolute;left:64px;right:64px;bottom:40px;height:3px;background:rgba(31,41,51,.12);}
+  #progress{height:100%;width:0;background:var(--ink);}
+  #chapter{position:absolute;left:64px;bottom:54px;font-size:15px;letter-spacing:.12em;color:var(--muted);}
+  #timecode{position:absolute;right:64px;bottom:54px;font-family:"SF Mono",Menlo,monospace;font-size:15px;color:var(--muted);}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="grid"></div>
+  <div id="header"><div><span class="dot">●</span>&nbsp; KNOWLEDGE · LESSON</div><div id="header-meta">VIDEO</div></div>
+
+  <!-- 示例：复利（4 场最小演示）。完整一讲按 references/lesson-arc.md 的七个槽位加场景；
+       段 id 必须与 script.json 一致。 -->
+  <div class="scene" id="scene-hook">
+    <div id="hook-title">10 万 <span>→</span> 76 万</div>
+    <div id="hook-sub">年化 7%，30 年，复利。</div>
+    <div id="hook-chips">
+      <div class="chip" id="hook-c0">本金</div>
+      <div class="chip" id="hook-c1">利率</div>
+      <div class="chip" id="hook-c2">时间</div>
+    </div>
+  </div>
+
+  <div class="scene" id="scene-define">
+    <div class="scene-title">复利是什么</div>
+    <div class="scene-sub">利息也参与生息。</div>
+    <div id="def-card">
+      <div class="k">DEFINITION</div>
+      <div class="t">复利</div>
+      <div class="d">每一期产生的利息计入本金，下一期一起生息。</div>
+    </div>
+    <div id="def-formula">A = P (1 + r)<sup>n</sup></div>
+  </div>
+
+  <div class="scene" id="scene-example">
+    <div class="scene-title">算一遍</div>
+    <div class="scene-sub">10 万本金，年化 7%。</div>
+    <div id="ex-input">P = 100,000 &nbsp; r = 7%</div>
+    <div id="ex-rows">
+      <div class="exrow" id="ex-10"><span>10 年</span><b>19.7 万</b></div>
+      <div class="exrow" id="ex-20"><span>20 年</span><b>38.7 万</b></div>
+      <div class="exrow" id="ex-30"><span>30 年</span><b>76.1 万</b></div>
+    </div>
+    <div id="ex-note">后期增长快，是因为利息也在生息。</div>
+  </div>
+
+  <div class="scene" id="scene-recap">
+    <div class="scene-title">四句话带走</div>
+    <div class="scene-sub">能复述，才算看过。</div>
+    <div id="recap-chips">
+      <div class="chip" id="rc-0">本金</div>
+      <div class="chip" id="rc-1">利率</div>
+      <div class="chip" id="rc-2">时间</div>
+      <div class="chip" id="rc-3">再投资</div>
+    </div>
+    <div id="recap-checks">
+      <div class="check" id="rc-check0"><div class="k">CHECK 01</div><div class="t">不看笔记写出公式</div></div>
+      <div class="check" id="rc-check1"><div class="k">CHECK 02</div><div class="t">解释为什么后期快</div></div>
+      <div class="check" id="rc-check2"><div class="k">CHECK 03</div><div class="t">算一个 10 年例子</div></div>
+    </div>
+    <div id="recap-next">下一讲：复利在贷款和投资里的差别。</div>
+  </div>
+
+  <div id="subtitle"></div>
+  <div id="progress-wrap"><div id="progress"></div></div>
+  <div id="chapter"></div>
+  <div id="timecode"></div>
+</div>
+
+<script src="scene-data.js"></script>
+<script src="cues.js"></script>
+<script src="subtitles.js"></script>
+<script>
+// 本模板假设 hook / define / example / recap 分别至少有 3 / 2 / 4 / 3 句旁白。
+// 按你的 script.json 调整 cue 索引；缺失 cue 会在控制台告警并阻止出片。
+const TL = window.TIMELINE;
+const CU = window.CUES || {};
+const SCENES = ['hook', 'define', 'example', 'recap'];
+const $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const span = (t, a, b) => clamp((t - a) / (b - a));
+const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+const getSeg = id => TL.segments.find(s => s.id === id);
+
+// Segment-relative time of sentence i. Missing cues are loud on purpose:
+// returning 0 silently would pile every beat at the start of the scene.
+function cue(id, i) {
+  const s = CU[id] && CU[id].sentences && CU[id].sentences[i];
+  if (!s) {
+    console.warn(`missing cue: ${id}[${i}]`);
+    return 0;
+  }
+  return s.start;
+}
+
+function reveal(el, t, start, dur = 0.5, dy = 20) {
+  if (!el) return;
+  const p = ease(span(t, start, start + dur));
+  el.style.opacity = p;
+  el.style.transform = `translateY(${dy * (1 - p)}px)`;
+}
+
+function setScene(id, opacity) {
+  const el = $('scene-' + id);
+  if (!el) return;
+  el.style.opacity = opacity;
+  el.style.visibility = opacity > 0.001 ? 'visible' : 'hidden';
+}
+
+function sceneOpacity(id, t, inD = 0.6, outD = 0.6) {
+  const s = getSeg(id);
+  if (!s) return 0;                       // 段 id 改名/缺失时不要崩
+  const a = inD > 0 ? clamp((t - (s.start - inD / 2)) / inD) : 1;
+  const b = outD > 0 ? clamp(((s.end + outD / 2) - t) / outD) : 1;
+  return Math.min(a, b);
+}
+
+function renderHook(t) {
+  const s = getSeg('hook');
+  if (!s) return;
+  const lt = t - s.start;
+  const c = i => cue('hook', i);
+  const title = $('hook-title');
+  title.style.opacity = 1;
+  title.style.transform = 'none';
+  reveal($('hook-sub'), lt, c(0), 0.6, 16);
+  reveal($('hook-c0'), lt, c(0), 0.5);
+  reveal($('hook-c1'), lt, c(1), 0.5);
+  reveal($('hook-c2'), lt, c(2), 0.5);
+  ['hook-c0', 'hook-c1', 'hook-c2'].forEach((id, i) => {
+    const el = $(id);
+    if (el) el.classList.toggle('on', lt >= c(i));
+  });
+}
+
+function renderDefine(t) {
+  const s = getSeg('define');
+  if (!s) return;
+  const lt = t - s.start;
+  const c = i => cue('define', i);
+  reveal($('def-card'), lt, c(0), 0.6, 24);
+  reveal($('def-formula'), lt, c(1), 0.6, 16);
+}
+
+function renderExample(t) {
+  const s = getSeg('example');
+  if (!s) return;
+  const lt = t - s.start;
+  const c = i => cue('example', i);
+  reveal($('ex-input'), lt, c(0), 0.5, 12);
+  [0, 1, 2].forEach(i => reveal($('ex-' + [10, 20, 30][i]), lt, c(i + 1), 0.5, 18));
+  reveal($('ex-note'), lt, c(3), 0.5, 12);
+  [0, 1, 2].forEach(i => {
+    const el = $('ex-' + [10, 20, 30][i]);
+    if (el) el.classList.toggle('hot', lt >= c(i + 1) && (i === 2 || lt < c(i + 2)));
+  });
+}
+
+function renderRecap(t) {
+  const s = getSeg('recap');
+  if (!s) return;
+  const lt = t - s.start;
+  const c = i => cue('recap', i);
+  [0, 1, 2, 3].forEach(i => reveal($('rc-' + i), lt, c(0) + i * 0.35, 0.4));
+  [0, 1, 2].forEach(i => reveal($('rc-check' + i), lt, c(1) + i * 0.35, 0.4, 16));
+  reveal($('recap-next'), lt, c(2), 0.5, 16);
+}
+
+function renderSubtitle(t) {
+  const el = $('subtitle');
+  if (!el) return;
+  let active = null;
+  for (const sub of (window.SUBTITLES || [])) {
+    if (t >= sub.start && t <= sub.end) { active = sub; break; }
+  }
+  if (active) {
+    el.textContent = active.text;
+    el.style.opacity = 1;
+  } else {
+    el.style.opacity = 0;
+  }
+}
+
+function renderAt(t) {
+  SCENES.forEach((id, i) => {
+    const first = i === 0;
+    const last = i === SCENES.length - 1;
+    setScene(id, sceneOpacity(id, t, first ? 0 : 0.6, last ? 0 : 0.6));
+  });
+
+  renderHook(t);
+  renderDefine(t);
+  renderExample(t);
+  renderRecap(t);
+  renderSubtitle(t);
+
+  $('progress').style.width = `${clamp(t / TL.total) * 100}%`;
+  let cur = TL.segments[0];
+  for (const s of TL.segments) if (t >= s.start) cur = s;
+  $('chapter').textContent = cur.label || cur.id;
+  const mm = String(Math.floor(t / 60)).padStart(2, '0');
+  const ss = String(Math.floor(t % 60)).padStart(2, '0');
+  $('timecode').textContent = `${mm}:${ss}`;
+}
+
+window.renderAt = renderAt;
+renderAt(0);
+
+// Live preview only. Production rendering always calls renderAt(i / fps).
+if (location.search.includes('preview')) {
+  const start = performance.now();
+  (function loop(now) {
+    const t = ((now - start) / 1000) % TL.total;
+    renderAt(t);
+    requestAnimationFrame(loop);
+  })(performance.now());
+}
+</script>
+</body>
+</html>

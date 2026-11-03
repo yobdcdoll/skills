@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson player</title>
+<style>
+  :root{
+    --paper:#F7F3EA; --ink:#1F2933; --muted:#6B7280; --line:#D8D0C3;
+    --blue:#2563EB; --orange:#F97316; --green:#16A34A;
+    --white:#FFFDF8; --mono:"SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    background-image:linear-gradient(rgba(31,41,51,.035) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(31,41,51,.035) 1px,transparent 1px);
+    background-size:48px 48px;}
+  main{max-width:1180px;margin:0 auto;padding:56px 28px 90px;}
+  .eyebrow{font-family:var(--mono);font-size:13px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;}
+  h1{font-size:52px;letter-spacing:-.05em;margin:14px 0 10px;font-weight:800;}
+  h1 span{color:var(--blue);}
+  .sub{font-size:20px;color:var(--muted);margin:0 0 30px;line-height:1.6;}
+  .player{background:var(--white);border:2px solid var(--ink);border-radius:20px;padding:14px;
+    box-shadow:12px 12px 0 rgba(31,41,51,.12);}
+  video{display:block;width:100%;border-radius:10px;background:#111;}
+  .meta{display:flex;gap:18px;flex-wrap:wrap;margin:16px 4px 0;font-family:var(--mono);font-size:13px;color:var(--muted);}
+  .meta b{color:var(--ink);}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:34px 0;}
+  .card{background:var(--white);border:1.5px solid var(--line);border-radius:16px;padding:24px 26px;}
+  .card.strong{border:2px solid var(--ink);box-shadow:8px 8px 0 rgba(31,41,51,.08);}
+  .card h2{font-size:21px;margin:0 0 12px;}
+  .card p,.card li{font-size:16px;line-height:1.7;color:#39424E;margin:0;}
+  .card ol{padding-left:24px;margin:0;}
+  .card li{margin:10px 0;}
+  textarea{width:100%;min-height:54px;margin-top:8px;padding:10px 12px;border:1.5px solid var(--line);
+    border-radius:10px;background:#fff;font:inherit;font-size:15px;resize:vertical;}
+  .checkitem{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:1.5px solid var(--line);
+    border-radius:12px;background:#fff;margin:10px 0;}
+  .checkitem input{width:18px;height:18px;margin-top:3px;accent-color:var(--blue);}
+  .checkitem label{font-size:16px;line-height:1.5;cursor:pointer;}
+  .checkitem small{display:block;color:var(--muted);font-size:13px;margin-top:3px;}
+  .schedule{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px;}
+  .sched{border:1.5px solid var(--line);border-radius:12px;padding:16px;background:#fff;}
+  .sched .when{font-family:var(--mono);font-size:12px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;}
+  .sched .date{font-size:22px;font-weight:800;margin-top:6px;}
+  .sched .what{font-size:14px;color:var(--muted);line-height:1.6;margin-top:6px;}
+  .row{display:grid;grid-template-columns:240px 1fr 54px;gap:18px;align-items:center;padding:12px 0;
+    border-bottom:1px dashed var(--line);}
+  .row:last-of-type{border-bottom:0;}
+  .row label{font-size:16px;font-weight:600;}
+  input[type=range]{width:100%;accent-color:var(--blue);}
+  output{font-family:var(--mono);font-size:18px;text-align:right;color:var(--blue);font-weight:700;}
+  .actions{display:flex;gap:12px;align-items:center;margin-top:18px;flex-wrap:wrap;}
+  button{border:2px solid var(--ink);background:var(--ink);color:var(--white);border-radius:999px;
+    padding:11px 20px;font:inherit;font-size:15px;font-weight:700;cursor:pointer;}
+  button.ghost{background:transparent;color:var(--ink);}
+  #status{font-family:var(--mono);font-size:13px;color:var(--green);}
+  table{width:100%;border-collapse:collapse;background:var(--white);border:1.5px solid var(--line);
+    border-radius:14px;overflow:hidden;}
+  th,td{text-align:left;padding:12px 16px;border-bottom:1px solid var(--line);font-size:15px;vertical-align:top;}
+  th{font-family:var(--mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);background:#F1ECE2;}
+  tr:last-child td{border-bottom:0;}
+  td.time{font-family:var(--mono);white-space:nowrap;color:var(--blue);}
+  footer{margin-top:50px;font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.8;}
+  @media(max-width:760px){
+    h1{font-size:36px;} .grid{grid-template-columns:1fr;} .schedule{grid-template-columns:1fr;}
+    .row{grid-template-columns:1fr;gap:8px;} output{text-align:left;}
+  }
+</style>
+</head>
+<body data-lesson="compound-interest">
+<!-- data-lesson 用来隔离 localStorage；每个知识点改一个唯一值，或删掉让它按文件路径区分。 -->
+<main>
+  <div class="eyebrow">LESSON 01 · KNOWLEDGE POINT</div>
+  <h1>知识点<span>名称</span></h1>
+  <p class="sub">一句话说明这一讲解决什么问题。看完能复述、能解释、能应用。</p>
+
+  <section class="player">
+    <!-- 改成实际成片名（render.sh 默认输出 <id>.mp4）；重新出片后加 ?v=<timestamp> 避免缓存。 -->
+    <video id="lesson-video" src="lesson.mp4" controls preload="metadata" poster="poster.jpg"></video>
+    <div class="meta">
+      <span><b>1920×1080</b> · 15fps</span>
+      <span><b>时长以成片为准</b></span>
+      <span>配音：<b>Xiaoxiao Calm</b></span>
+      <span>字幕：<b>已内嵌</b> · 外挂 <b>lesson.srt</b></span>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>这一讲覆盖什么</h2>
+      <ul>
+        <li>核心问题与一句话定义</li>
+        <li>结构、主流程、分支</li>
+        <li>一个具体数字的例子</li>
+        <li>边界、契约、常见错误</li>
+        <li>高频追问与横向对比</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>怎么用这一讲</h2>
+      <p>先做看前基线，再看视频，然后立即做检查；24 小时、3 天、7 天各回来一次。不要只看视频，<b>能复述和手写才算过</b>。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>看前基线 · 5 题</h2>
+    <div class="card">
+      <ol>
+        <li>问题一：这个知识点解决什么问题？<textarea data-q="pre1"></textarea></li>
+        <li>问题二：它的核心结构是什么？<textarea data-q="pre2"></textarea></li>
+        <li>问题三：主流程有哪几步？<textarea data-q="pre3"></textarea></li>
+        <li>问题四：边界条件是什么？<textarea data-q="pre4"></textarea></li>
+        <li>问题五：什么时候不该用它？<textarea data-q="pre5"></textarea></li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <h2>看后检查 · 3 件事</h2>
+    <div class="card strong">
+      <div class="checkitem"><input type="checkbox" id="c1"><label for="c1">不看笔记，复述或写出主流程<small>标出至少两个分支、边界或易错点。</small></label></div>
+      <div class="checkitem"><input type="checkbox" id="c2"><label for="c2">回答 5–6 个追问<small>每个先给结论，再补一句为什么。</small></label></div>
+      <div class="checkitem"><input type="checkbox" id="c3"><label for="c3">做 3 道检查题<small>用一组具体数字算一遍。</small></label></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>复习节奏</h2>
+    <div class="schedule">
+      <div class="sched"><div class="when">24 HOURS</div><div class="date" id="d1">—</div><div class="what">只看时间轴 + 重做错题。</div></div>
+      <div class="sched"><div class="when">3 DAYS</div><div class="date" id="d3">—</div><div class="what">不看视频，完整复述。</div></div>
+      <div class="sched"><div class="when">7 DAYS</div><div class="date" id="d7">—</div><div class="what">做一道变式题，检查迁移。</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>自评</h2>
+    <div class="card">
+      <div class="row"><label for="s1">理解度</label><input id="s1" type="range" min="0" max="5" value="3"><output for="s1">3</output></div>
+      <div class="row"><label for="s2">可复述度</label><input id="s2" type="range" min="0" max="5" value="3"><output for="s2">3</output></div>
+      <div class="row"><label for="s3">可应用度</label><input id="s3" type="range" min="0" max="5" value="3"><output for="s3">3</output></div>
+      <div class="actions">
+        <button id="export">导出 JSON</button>
+        <button class="ghost" id="reset">清除</button>
+        <span id="status"></span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>时间轴</h2>
+    <!-- 建议从 timeline.json 生成这张表；重出片后必须同步，否则会和成片脱节。 -->
+    <table>
+      <thead><tr><th>时间</th><th>段落</th><th>一句话</th></tr></thead>
+      <tbody>
+        <tr><td class="time">00:00</td><td>开场</td><td>问题与钩子</td></tr>
+        <tr><td class="time">00:45</td><td>定义</td><td>一句话定义</td></tr>
+        <tr><td class="time">02:10</td><td>原理</td><td>主流程</td></tr>
+        <tr><td class="time">06:00</td><td>例子</td><td>具体数字跑一遍</td></tr>
+        <tr><td class="time">12:00</td><td>边界</td><td>易错点与限制</td></tr>
+        <tr><td class="time">15:20</td><td>总结</td><td>五句话带走</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    复习锚点：<span id="built"></span> · 视频与字幕来自同一份逐句时间码。
+  </footer>
+</main>
+
+<script>
+const KEY = 'lesson-review:' + (document.body.dataset.lesson || location.pathname);
+const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// 复习节奏以“第一次打开播放页”为锚点，之后不再随当天日期漂移。
+function anchorDate() {
+  const key = KEY + ':anchor';
+  let iso = localStorage.getItem(key);
+  if (!iso) {
+    iso = fmt(new Date());
+    localStorage.setItem(key, iso);
+  }
+  return new Date(iso + 'T00:00:00');
+}
+
+function setDates() {
+  const base = anchorDate();
+  const add = n => { const d = new Date(base); d.setDate(d.getDate() + n); return fmt(d); };
+  document.getElementById('d1').textContent = add(1);
+  document.getElementById('d3').textContent = add(3);
+  document.getElementById('d7').textContent = add(7);
+  document.getElementById('built').textContent = fmt(base);
+}
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY) || '{}');
+    if (s.scores) {
+      s.scores.forEach((v, i) => {
+        const el = document.getElementById('s' + (i + 1));
+        if (el) { el.value = v; el.nextElementSibling.textContent = v; }
+      });
+    }
+    if (s.checks) s.checks.forEach((v, i) => {
+      const el = document.getElementById('c' + (i + 1));
+      if (el) el.checked = v;
+    });
+    if (s.pre) Object.entries(s.pre).forEach(([k, v]) => {
+      const el = document.querySelector(`[data-q="${k}"]`);
+      if (el) el.value = v;
+    });
+  } catch {}
+}
+
+function save() {
+  const scores = [1, 2, 3].map(i => Number(document.getElementById('s' + i).value));
+  const checks = [1, 2, 3].map(i => document.getElementById('c' + i).checked);
+  const pre = {};
+  document.querySelectorAll('[data-q]').forEach(el => { pre[el.dataset.q] = el.value; });
+  localStorage.setItem(KEY, JSON.stringify({ scores, checks, pre, savedAt: new Date().toISOString() }));
+}
+
+document.querySelectorAll('input[type=range]').forEach(el => {
+  el.addEventListener('input', () => {
+    el.nextElementSibling.textContent = el.value;
+    save();
+  });
+});
+document.querySelectorAll('input[type=checkbox], textarea').forEach(el => el.addEventListener('change', save));
+
+document.getElementById('export').addEventListener('click', () => {
+  save();
+  const blob = new Blob([localStorage.getItem(KEY)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'lesson-review.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  document.getElementById('status').textContent = '已导出';
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+  if (!confirm('清除本讲的本地记录（含复习锚点）？')) return;
+  localStorage.removeItem(KEY);
+  localStorage.removeItem(KEY + ':anchor');
+  location.reload();
+});
+
+setDates();
+load();
+</script>
+</body>
+</html>

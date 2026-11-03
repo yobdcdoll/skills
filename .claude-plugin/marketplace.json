@@ -4,7 +4,7 @@
     "name": "yobdcdoll",
     "url": "https://github.com/yobdcdoll"
   },
-  "description": "Clawhome agent skills for exam restoration and GitHub network diagnostics.",
+  "description": "Clawhome agent skills for exam restoration, GitHub network diagnostics, and general knowledge-point explainer videos.",
   "plugins": [
     {
       "name": "exam-clean",
@@ -30,6 +30,21 @@
         "dns",
         "macos",
         "networking"
+      ]
+    },
+    {
+      "name": "gen-knowledge-video",
+      "source": "./skills/gen-knowledge-video",
+      "description": "Turn any knowledge point or skill into a self-study explainer video with narration, cue-aligned visuals, and subtitles.",
+      "category": "productivity",
+      "keywords": [
+        "video",
+        "teaching",
+        "explainer",
+        "tts",
+        "edge-tts",
+        "subtitles",
+        "playwright"
       ]
     }
   ]
