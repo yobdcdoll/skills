@@ -17,6 +17,13 @@ Outputs:
     timeline.json            absolute segment starts/ends
     scene-data.js            window.TIMELINE = ...
     cues.json                per-segment sentence/word boundaries (segment-relative)
+
+Speed:
+    script.json `"speed": 1.24` (skill default) speeds narration up 1.24x with
+    ffmpeg atempo, which preserves pitch. Every cue is rescaled by the *measured*
+    duration ratio, not by the nominal value, so subtitles and visuals stay
+    locked to the audio. Lead/gap/tail are breathing room and are not scaled.
+    Set `"speed": 1.0` to keep the raw TTS pace.
 """
 
 from __future__ import annotations
@@ -53,6 +60,9 @@ except ValueError as exc:
 GAP = float(DATA.get("gap", 0.35))
 LEAD = float(DATA.get("lead", 0.8))
 TAIL = float(DATA.get("tail", 0.8))
+SPEED = float(DATA.get("speed", 1.24))
+if not 0.5 <= SPEED <= 2.0:
+    sys.exit("speed must be between 0.5 and 2.0 (atempo range)")
 
 SEGMENTS = DATA.get("segments") or []
 if not SEGMENTS:
@@ -88,6 +98,27 @@ def probe_duration(path: Path) -> float:
         ]
     )
     return float(out.decode().strip())
+
+
+def atempo_chain(speed: float) -> str:
+    """Build an atempo filter chain; one instance is only reliable in 0.5–2.0."""
+    filters: list[str] = []
+    s = speed
+    while s > 2.0:
+        filters.append("atempo=2.0")
+        s /= 2.0
+    while s < 0.5:
+        filters.append("atempo=0.5")
+        s /= 0.5
+    filters.append(f"atempo={s:.6f}")
+    return ",".join(filters)
+
+
+def scale_events(events: list[dict], ratio: float, duration: float) -> None:
+    """Rescale segment-relative cue times after the audio speed changes."""
+    for ev in events:
+        ev["start"] = round(ev["start"] * ratio, 3)
+        ev["end"] = round(min(ev["end"] * ratio, duration), 3)
 
 
 def fallback_sentences(text: str, duration: float) -> list[dict]:
@@ -163,24 +194,35 @@ async def main() -> None:
         print(f"synth {seg['id']} ...")
         mp3, sentences, words = await synth(seg)
         wav = AUDIO / f"{seg['id']}.wav"
-        run(
-            [
-                "ffmpeg",
-                "-y",
-                "-loglevel",
-                "error",
-                "-i",
-                str(mp3),
-                "-ar",
-                "48000",
-                "-ac",
-                "1",
-                "-c:a",
-                "pcm_s16le",
-                str(wav),
-            ]
-        )
+        source_duration = probe_duration(mp3)
+        convert = [
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-i",
+            str(mp3),
+        ]
+        if abs(SPEED - 1.0) > 1e-6:
+            convert += ["-filter:a", atempo_chain(SPEED)]
+        convert += [
+            "-ar",
+            "48000",
+            "-ac",
+            "1",
+            "-c:a",
+            "pcm_s16le",
+            str(wav),
+        ]
+        run(convert)
         duration = probe_duration(wav)
+
+        # atempo is exact in duration, but the MP3 container adds padding.
+        # Scale by the measured ratio so cues stay locked to the sped audio.
+        if abs(SPEED - 1.0) > 1e-6 and source_duration > 0:
+            ratio = duration / source_duration
+            scale_events(sentences, ratio, duration)
+            scale_events(words, ratio, duration)
 
         if not sentences:
             print(
@@ -280,6 +322,7 @@ async def main() -> None:
         "voice": VOICE,
         "rate": RATE,
         "pitch": PITCH,
+        "speed": SPEED,
         "total": total,
         "lead": LEAD,
         "gap": GAP,
@@ -302,6 +345,7 @@ async def main() -> None:
             {
                 "total": total,
                 "segments": len(timeline),
+                "speed": SPEED,
                 "full_wav": str(full),
                 "cues": str(ROOT / "cues.json"),
             },

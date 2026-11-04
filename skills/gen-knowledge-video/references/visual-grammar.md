@@ -30,6 +30,10 @@
 - 数字必须具体，并且和旁白同一时刻切换。
 - 代码只亮当前行；公式只亮当前项；表格只亮当前行/列。
 - 画面里承诺存在的元素必须真实存在（第 17 个桶、第 5 年、第三阶段）。
+- **字号按手机可读性定，不按“桌面看着舒服”定**：正文 ≥32px，表格 ≥30px，说明/标签 ≥18px，字幕 44px。空间不够时先删内容，不要先缩字。
+- 一屏装不下时，优先拆成两屏或两行，不要靠 24px 以下的字硬塞。
+- 文字容器默认加 `overflow-wrap:anywhere`；flex/grid 子项加 `min-width:0`；单行数字/公式用 `white-space:nowrap` 时必须确认容器够宽。
+- 放大字号后必须用**最长真实文案**检查；短占位词看不出溢出。渲染前跑 `check_layout.mjs`。
 
 ## 3. 公式与符号
 
@@ -46,7 +50,7 @@
   A = P<span class="term" id="f-r">(1 + r)</span><sup>n</sup>
 </div>
 <style>
-.formula{font:700 54px/1.40 "Times New Roman","STIX Two Math",serif;}
+.formula{font:700 60px/1.40 "Times New Roman","STIX Two Math",serif;}
 .formula .term{padding:0 6px;border-radius:6px;}
 .formula .term.on{background:rgba(37,99,235,.14);color:var(--blue);}
 </style>
@@ -96,9 +100,9 @@ function renderFormula(t) {
 <style>
 .card{width:1100px;padding:36px 42px;background:var(--white);border:2px solid var(--ink);
   border-radius:18px;box-shadow:10px 10px 0 rgba(31,41,51,.10);}
-.card .k{font:600 14px/1.2 var(--mono);letter-spacing:.14em;color:var(--muted);}
-.card .t{font-size:52px;font-weight:800;margin-top:12px;}
-.card .d{font-size:28px;line-height:1.6;color:#39424E;margin-top:14px;}
+.card .k{font:600 18px/1.2 var(--mono);letter-spacing:.14em;color:var(--muted);}
+.card .t{font-size:58px;font-weight:800;margin-top:12px;}
+.card .d{font-size:34px;line-height:1.6;color:#39424E;margin-top:14px;overflow-wrap:anywhere;}
 </style>
 ```
 
@@ -114,8 +118,8 @@ function renderFormula(t) {
 .steps{display:flex;gap:24px;}
 .step{width:420px;min-height:180px;padding:24px 28px;background:var(--white);
   border:1.5px solid var(--line);border-radius:16px;opacity:0;}
-.step b{display:block;font:600 14px/1 var(--mono);color:var(--muted);}
-.step span{display:block;font-size:30px;font-weight:800;margin-top:16px;}
+.step b{display:block;font:600 18px/1 var(--mono);color:var(--muted);}
+.step span{display:block;font-size:34px;font-weight:800;margin-top:16px;}
 .step.on{border-color:var(--blue);box-shadow:8px 8px 0 rgba(37,99,235,.12);}
 </style>
 ```
@@ -133,8 +137,8 @@ function renderFormula(t) {
 <style>
 .compare{width:1300px;border-collapse:collapse;background:var(--white);border:1.5px solid var(--line);}
 .compare th,.compare td{padding:18px 24px;border-bottom:1px solid var(--line);
-  font-size:24px;text-align:left;}
-.compare th{font:600 14px/1.2 var(--mono);letter-spacing:.12em;color:var(--muted);background:#F1ECE2;}
+  font-size:30px;text-align:left;overflow-wrap:anywhere;}
+.compare th{font:600 18px/1.2 var(--mono);letter-spacing:.12em;color:var(--muted);background:#F1ECE2;}
 .compare tr.on td{background:rgba(37,99,235,.07);color:var(--blue);}
 </style>
 ```
@@ -148,8 +152,8 @@ function renderFormula(t) {
 <style>
 .row{width:900px;display:flex;justify-content:space-between;align-items:baseline;
   padding:18px 8px;border-bottom:1px dashed var(--line);opacity:0;}
-.row span{font-size:28px;color:var(--muted);}
-.row b{font:800 44px/1 var(--mono);color:var(--ink);}
+.row span{min-width:0;font-size:34px;color:var(--muted);overflow-wrap:anywhere;}
+.row b{font:800 50px/1 var(--mono);color:var(--ink);white-space:nowrap;}
 .row.hot b{color:var(--orange);}
 </style>
 ```
@@ -167,7 +171,7 @@ function renderFormula(t) {
 .tl::before{content:"";position:absolute;left:0;right:0;top:10px;height:2px;background:var(--line);}
 .node{position:relative;width:180px;display:flex;flex-direction:column;align-items:center;gap:14px;opacity:0;}
 .node i{width:20px;height:20px;border-radius:50%;background:var(--white);border:3px solid var(--blue);}
-.node span{font:700 24px/1 var(--mono);}
+.node span{font:700 28px/1 var(--mono);}
 </style>
 ```
 

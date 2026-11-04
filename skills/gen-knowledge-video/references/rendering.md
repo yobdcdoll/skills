@@ -14,11 +14,13 @@ lesson/
   cues.js
   subtitles.js
   <id>.srt
+  watermark.json    # 可选；含 mark/key，不要提交
   audio/
     full.wav
     <segment>.wav
   frames/
     f00000.jpg
+    .watermark.json # 水印状态，自动生成
   <id>.mp4          # render.sh 默认按 script.json 的 id 命名，可用 OUT= 覆盖
   index.html
   render-0.log ...
@@ -33,22 +35,26 @@ node <skill>/scripts/build_subtitles.mjs      # cues.js + subtitles.js + SRT
 bash <skill>/scripts/render.sh 15 4           # 分片渲染 + ffmpeg
 ```
 
-改了旁白、声音、语速、段落 id 或 `gap/lead/tail` 之后，必须从第一步重跑。不要只改音频或只改字幕。
+改了旁白、声音、`speed`、段落 id 或 `gap/lead/tail` 之后，必须从第一步重跑。不要只改音频或只改字幕。
 
 ## 3. render.sh 的行为
 
 1. 检查 `script.json`、`scene.html`、`audio/full.wav`、`cues.js`、`subtitles.js`、`scene-data.js` 是否存在；
-2. 从 `audio/full.wav` 读时长，算出 `ceil(duration × fps)` 帧；
-3. 把帧区间均分给 N 个 `render_range.mjs` 进程；区间左闭右开、互不重叠；
-4. 检查帧数完整；
-5. 用 ffmpeg 合成 H.264 + AAC，输出 `<id>.mp4`；
-6. 打印 `ffprobe` 结果。
+2. 如果 `LAYOUT_CHECK=1`，先跑 `check_layout.mjs`，发现文字越界/重叠/压字幕就退出；
+3. 从 `audio/full.wav` 读时长，算出 `ceil(duration × fps)` 帧；
+4. 把帧区间均分给 N 个 `render_range.mjs` 进程；区间左闭右开、互不重叠；
+5. 检查帧数完整；
+6. 如果存在 `watermark.json`，对 `frames/` 嵌入隐藏水印（`WATERMARK=0` 跳过）；
+7. 用 ffmpeg 合成 H.264 + AAC，输出 `<id>.mp4`；
+8. 打印 `ffprobe` 结果。
 
 环境变量：
 
 - `OUT=...` 输出文件名
 - `CRF=20`、`PRESET=veryfast`
 - `FORCE=1` 清空非空 `frames/` 后重渲
+- `LAYOUT_CHECK=1` 渲染前检查文字排版
+- `WATERMARK=0` 即使有 `watermark.json` 也不嵌入水印
 
 ## 4. render_range.mjs 的行为
 
@@ -77,10 +83,11 @@ ffmpeg -y -framerate 15 -i frames/f%05d.jpg -i audio/full.wav \
 
 ## 6. 环境与跨平台
 
-依赖：`ffmpeg` / `ffprobe`、`python3` + `edge-tts`、`node` + Playwright（或 `playwright-core` + 本机 Chrome/Edge）。
+依赖：`ffmpeg` / `ffprobe`、`python3` + `edge-tts`、`node` + Playwright（或 `playwright-core` + 本机 Chrome/Edge）。启用隐藏水印时还需要 `python3` 的 `numpy` 和 `pillow`。
 
 ```bash
 python3 -m pip install edge-tts
+python3 -m pip install numpy pillow        # 仅隐藏水印需要
 npm i playwright && npx playwright install chromium   # 或复用本机 Chrome/Edge
 ```
 
@@ -90,3 +97,30 @@ npm i playwright && npx playwright install chromium   # 或复用本机 Chrome/E
 - 渲染前等 `document.fonts.ready`，非中文语言也要确认对应字体存在。
 - 同一台机器并行 4 个浏览器实例通常足够；再多会抢 CPU。
 - Windows 下 `render.sh` 需要 WSL 或 Git Bash；也可以直接对每个分片运行 `node render_range.mjs <start> <end> <fps>`，再用 ffmpeg 合成。
+
+## 7. 排版检查
+
+```bash
+node <skill>/scripts/check_layout.mjs          # 从课程目录运行
+node <skill>/scripts/check_layout.mjs --warn   # 只报告，不失败
+LAYOUT_CHECK=1 bash <skill>/scripts/render.sh 15 4
+```
+
+它沿时间轴每 0.5s 调用一次 `renderAt(t)`，检查所有可见文字元素：
+
+- 是否越出 1920×1080 画布；
+- `scrollWidth > clientWidth`（横向溢出）；
+- 有 `overflow:hidden`/`max-height` 时的纵向裁切；
+- 两个文字元素是否互相压住；
+- 是否压住 44px 字幕。
+
+大字号本身的行框高于字形是正常现象，不会被误报。发现问题时先改文案/拆屏，不要缩到最小字号以下。
+
+## 8. 隐藏水印
+
+```bash
+python3 <skill>/scripts/watermark.py embed-frames --frames frames --config watermark.json
+python3 <skill>/scripts/watermark.py extract --video <id>.mp4 --key "<key>"
+```
+
+`render.sh` 会在编码前自动执行 embed-frames。原理、参数、抗压范围和排错见 `references/watermark.md`。需要 `numpy` + `pillow`。

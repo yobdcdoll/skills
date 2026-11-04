@@ -1,0 +1,6 @@
+{
+  "mark": "your-id",
+  "key": "replace-with-a-secret-only-you-know",
+  "alpha": 12,
+  "coef": "3,2"
+}

@@ -3,3 +3,6 @@ __pycache__/
 *.pyo
 *.egg-info/
 *.bak.*
+
+# Lesson-local watermark config contains a secret key; never commit it.
+watermark.json

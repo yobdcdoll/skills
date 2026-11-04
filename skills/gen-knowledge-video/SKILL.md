@@ -1,8 +1,8 @@
 ---
 name: gen-knowledge-video
-description: 把任意知识点或技能点做成可自学的教学视频（旁白 + 画面 + 内嵌字幕 + SRT + 播放页 + 复习节奏）。当用户要求为某个概念、原理、机制、操作步骤、语言发音或考试知识点做讲解视频、教学视频、微课、科普视频，或把讲义、脚本、样片做成 4–20 分钟成片时使用；尤其适用于画面、语音、字幕需要逐句对齐的场景。
+description: 把任意知识点或技能点做成可自学的教学视频（旁白 + 画面 + 内嵌字幕 + SRT + 播放页 + 复习节奏）。当用户要求为某个概念、原理、机制、操作步骤、语言发音或考试知识点做讲解视频、教学视频、微课、科普视频，或把讲义、脚本、样片做成 4–20 分钟成片时使用；尤其适用于画面、语音、字幕需要逐句对齐的场景。需要给成片加不可见、可抗同分辨率二次压缩的个人水印时也使用。
 metadata:
-  version: 1.1.0
+  version: 1.3.0
 ---
 
 # 知识点 / 技能点教学视频
@@ -31,13 +31,13 @@ mkdir my-lesson && cd my-lesson
 # 0. 可选：先标定目标音色的实际语速，用来估字数
 python3 <skill>/scripts/calibrate.py
 
-# 1. 写 script.json（结构见第 2.4 节；先定 lang、target_minutes、槽位）
+# 1. 写 script.json（结构见第 2.4 节；先定 lang、target_minutes、speed、槽位）
 # 2. 一次 TTS：音频 + timeline + cues
 python3 <skill>/scripts/build_audio.py
 # 3. 字幕
 node <skill>/scripts/build_subtitles.mjs
 # 4. 复制 references/scene-template.html 为 scene.html，按你的槽位改
-# 5. 逐帧渲染 + 编码（15fps，4 个分片）
+# 5. 逐帧渲染 + 编码（15fps，4 个分片；有 watermark.json 会自动嵌入水印）
 bash <skill>/scripts/render.sh 15 4
 # 6. 按 references/qa-checklist.md 抽帧检查，再改 index.html
 ```
@@ -55,6 +55,7 @@ bash <skill>/scripts/render.sh 15 4
 | 范围 | **一个**知识点或技能点一讲 | 一讲塞多个知识点必然变成念目录 |
 | 时长 | 4–12 分钟，按内容定 | 见 `references/lesson-arc.md` 的分档；短知识点不要凑到 15 分钟 |
 | 语言 | 跟随用户和材料；默认中文 | 决定音色、字体、字幕切分和语速预算 |
+| 语速 | 在预设音色基础上再 **1.24×**（`speed: 1.24`） | 见 2.1 与 3.2；不要另外手工调 `rate` 来提速 |
 | 声音 | 中文默认 `xiaoxiao-calm` 预设（Xiaoxiao + rate `-12%` + pitch `-6Hz`） | 见第 3.1 节 |
 | 交付物 | 视频 + `index.html` + SRT + 检查题 | 只给 MP4 就只是“看过”，不是“学会” |
 | 复习节奏 | 即时 + 24h + 3d + 7d | 把视频变成学习闭环 |
@@ -104,7 +105,7 @@ bash <skill>/scripts/render.sh 15 4
 python3 <skill>/scripts/calibrate.py
 ```
 
-它会读取 `script.json` 的 voice/rate/pitch/lang，合成一段标准样本，输出当前音色的实测语速，以及 4/6/8/10/12/15/18 分钟对应的旁白预算。
+它会读取 `script.json` 的 voice/rate/pitch/lang/speed，合成一段标准样本，按 `speed` 折算后输出当前音色的实测语速，以及 4/6/8/10/12/15/18 分钟对应的旁白预算。
 
 没有标定工具时，用公式：
 
@@ -112,7 +113,9 @@ python3 <skill>/scripts/calibrate.py
 旁白字符数 ≈ (目标秒数 − lead − tail − gap × (段数 − 1)) × 实测字/秒
 ```
 
-参考实测（`xiaoxiao-calm`，即 `zh-CN-XiaoxiaoNeural` + rate `-12%` + pitch `-6Hz`）：中文约 **4.0 字符/秒（含标点）**，约 **3.6 汉字/秒**。不同音色、语速、语言差异很大，英文按词/分钟另测，不要直接套用中文数字。
+参考实测（`xiaoxiao-calm`，即 `zh-CN-XiaoxiaoNeural` + rate `-12%` + pitch `-6Hz`）：中文约 **4.0 字符/秒（含标点）**，约 **3.6 汉字/秒**。技能默认再叠加 `speed: 1.24`，所以按 **约 4.9 字符/秒、4.2 汉字/秒** 估预算。不同音色、语速、语言差异很大，英文按词/分钟另测，不要直接套用中文数字。
+
+`calibrate.py` 已经算进 `speed`，直接看它输出的预算；`speed` 只作用于旁白，`lead/gap/tail` 的停顿不变。
 
 先按目标时长估字数，写完再实测。不要先写 8000 字再指望剪到 16 分钟。
 
@@ -153,6 +156,7 @@ TTS 念符号经常翻车。脚本里写**口语化写法**，不要把手写符
   "audience": "高中生",
   "target_minutes": 8,
   "preset": "xiaoxiao-calm",
+  "speed": 1.24,
   "gap": 0.35,
   "lead": 0.8,
   "tail": 0.8,
@@ -173,6 +177,7 @@ TTS 念符号经常翻车。脚本里写**口语化写法**，不要把手写符
 - `role` 用于指导脚本和模板选择，渲染脚本不会读它；可以省略。
 - `lang` 影响字幕切分、字体和播放页文案。
 - `preset` 选语音预设，中文默认 `xiaoxiao-calm`；显式 `voice` / `rate` / `pitch` 会覆盖预设。预设定义见 `scripts/voice_presets.py`。
+- `speed` 是**预设之上的整体语速倍率**，默认 `1.24`；`build_audio.py` 用 ffmpeg `atempo` 实现并同步缩放 cues，音高不变。`1.0` 表示保持原始语速；要更慢/更快就改这一个值，不要同时改 `rate`。
 - `audience`、`target_minutes` 只用于规划，不参与合成。
 - `subtitle` 可省略，默认中文 32 字、英文 42 字符。
 
@@ -196,8 +201,8 @@ TTS 念符号经常翻车。脚本里写**口语化写法**，不要把手写符
 - `script.json` 里写 `"preset": "xiaoxiao-calm"` 即可；显式 `voice` / `rate` / `pitch` 会覆盖预设。
 - Edge TTS 免费接口没有 Azure 的 `mstts:express-as style="calm"` 参数；这里的 calm 是**音色 + 语速 + 音高**的固定预设。确实需要 Azure 的 calm style 时，按 `references/pipeline-contract.md` 替换 TTS 层。
 - 默认只用 AI 配音，不用真人出镜或真人录音；如果用户要真人声，必须由用户提供并确认授权。
-- 技术/知识内容不要用默认语速；默认语速普遍偏快，听众来不及看图。
-- 如果用户要“更冷/更 nerd/更成熟”，优先在**语速、音高、停顿**上调，不要频繁换声线；换声线会让整讲气质断裂。
+- 技术/知识内容不要用 TTS 裸默认语速；本技能默认是 `xiaoxiao-calm` 再叠 **1.24×**，节奏比“慢速讲课”紧，但仍留段间停顿。改 `speed` 后必须整讲试听，确认没有吞字、术语听不清。
+- 如果用户要“更冷/更 nerd/更成熟”，优先在**`speed`、音高、停顿**上调，不要频繁换声线；换声线会让整讲气质断裂。
 - 用户明确说不要男声，就不要推荐男声，也不要偷偷混用。
 - **不要克隆真实人物的声音**，除非本人明确授权。可以推荐音色相近的授权声音，但不要做声音复刻。
 - 声音比较页只保留一个文件、在同一页里切换试听；不要每轮新建一个 HTML。
@@ -205,6 +210,9 @@ TTS 念符号经常翻车。脚本里写**口语化写法**，不要把手写符
 ### 3.2 音频规格
 
 - Edge TTS 输出 MP3，转 **48kHz / 单声道 / PCM s16le WAV**。
+- 提速用 ffmpeg `atempo`（默认 `speed: 1.24`），**不要**用 `asetrate`（会变调）或播放器倍速（不会写进成片）。`atempo` 只改旁白，`lead/gap/tail` 保持原值。
+- 已生成过的课程：在 `script.json` 加/改 `speed`，然后按 `build_audio.py → build_subtitles.mjs → 重渲染` 全链路重跑。画面和字幕是烧进帧里的，**不能只换 `audio/full.wav`**。
+- 提速后必须用**实测的新段时长 / 原 MP3 时长**缩放该段所有 cue，不能只按 1.24 除；MP3 容器有 padding，直接除会越到段尾越偏。
 - 开头留 `lead = 0.8s`，段间 `gap = 0.35s`，结尾留 `tail = 0.8s`。
 - 最后把所有分段拼成 `audio/full.wav`，视频以它为准。
 - `timeline.total` 必须用 `ffprobe` 读 `full.wav` 的实际时长，不要只用 `lead + 各段时长 + gap + tail` 估算；拼接时最后一段后面不要再补一个 gap，否则音频会比时间轴长，`-shortest` 会悄悄截掉尾部。
@@ -217,6 +225,8 @@ TTS 念符号经常翻车。脚本里写**口语化写法**，不要把手写符
 - `type == "audio"` 的音频块 → 写 MP3
 - `type == "SentenceBoundary"` 的逐句起止 → `cues.json`
 - `type == "WordBoundary"` 的逐词起止 → 一并保存，英文场景可选用
+
+随后按 `speed`（默认 1.24）对 MP3 做 `atempo`，转 WAV，并用实测时长比例缩放同一批 cues。因此音频、timeline、cues 仍然是**同一次合成 + 同一次提速**的结果，下游不用再乘除倍率。
 
 中文的 `WordBoundary` 经常为空，**不要依赖它做对齐**；以 `SentenceBoundary` 为准。如果某段连 `SentenceBoundary` 都没有，脚本会按标点比例切分并给出警告。
 
@@ -294,7 +304,7 @@ const cue = (id, i) => {
 只要改了以下任何一项：
 
 - 旁白文字
-- 声音 / 语速 / 音高
+- 声音 / 语速 / 音高（含 `speed`）
 - 段落顺序或段落 id
 - `gap` / `lead` / `tail`
 
@@ -332,11 +342,12 @@ node <skill>/scripts/build_subtitles.mjs
 
 ### 5.2 样式
 
-- 位置：底部 `bottom: 82px`，避开进度条和时间码。
-- 字号：26px；最大宽度 1500px；居中；半透明纸色背景；圆角 10px。
-- 单行优先；超过最大宽度时换行到两行，**不要裁掉**。
-- 字幕区域下方预留至少 150px，正文/代码/图示/公式不要压进来。
-- 字幕颜色与正文一致，不要用高饱和色；字幕是辅助，不是主角。
+- 位置：底部 `bottom: 76px`，避开进度条和时间码。
+- 字号：**44px**（下限 40px），行高 1.36；最大宽度 1600px；居中；半透明纸色背景；圆角 10px。
+- 手机优先：16:9 视频在手机横屏全屏时约按 0.44 缩放，44px 约等于屏幕上 19px；26px 只有约 11px，手机上会看不清。不要把字号缩回 20 多 px 来塞更多字。
+- 单行优先；超过最大宽度时换行到两行，**不要裁掉**。两行还放不下就拆句，不要减字号。
+- 字幕区域下方预留至少 **220px**，正文/代码/图示/公式不要压进来。
+- 字幕颜色与正文一致，不要用高饱和色；字幕是辅助，但**可读性不能妥协**。
 
 ### 5.3 烧录与外挂
 
@@ -348,7 +359,7 @@ node <skill>/scripts/build_subtitles.mjs
 
 - 每条 `end > start`，且不跨段落到下一段。
 - Edge TTS 的句边界常带约 50ms 重叠，属正常；超过 80ms 才说明切分或时间分配有问题。
-- 最长的一条必须能在 1500px 内放下（允许两行）；放不下就拆句或减字号。
+- 最长的一条必须能在 1600px 内放下（允许两行）；放不下就拆句，不要靠缩到 40px 以下解决。
 - 专有名词、数字、代码标识符、公式要人工核对，TTS 的断句不等于正确断句。
 
 ---
@@ -358,10 +369,30 @@ node <skill>/scripts/build_subtitles.mjs
 ### 6.1 画布与安全区
 
 - 默认固定 `1920×1080`，`overflow: hidden`。用户要竖屏或其它画幅时，先确认再改场景和 viewport。
-- 页眉：`top: 42px`，左右 64px。
-- 标题：`left: 150px; top: 180px` 左右；正文从 `top: 300–360px` 开始。
-- 底部 150px 留给字幕、章节名、进度条。
+- 页眉：`top: 42px`，左右 64px，字号 20px。
+- 标题：`left: 150px; top: 180px` 左右，字号 64px；正文从 `top: 320–380px` 开始。
+- 底部 **220px** 留给两行 44px 字幕、章节名、进度条。
 - 左右至少 140px 安全边距，避免不同播放器裁边。
+
+字号是硬约束，不是审美偏好。视频大概率在手机上看，按 1920 宽设计时要假设观众看到的是缩小后的画面：
+
+| 用途 | 最小字号 |
+| --- | --- |
+| 字幕 | 44px（下限 40px） |
+| 正文、说明、列表 | 32–34px |
+| 表格单元、步骤文字 | 30–34px |
+| 关键数字、公式 | 50–60px |
+| 小标签、章节名、时间码 | 18px（不要低于 16px） |
+
+空间不够时：删内容 → 拆屏 → 换行，最后才考虑缩字号，且不得低于上表下限。
+
+**字号放大后，溢出风险也会放大。** 必须按最长真实文案验证，不要用“复利”“示例”这种短占位：
+
+- 允许纵向换行；不允许超出画面、压住字幕、或压住相邻文字/卡片。
+- 文本容器加 `overflow-wrap:anywhere`；flex/grid 子项加 `min-width:0`；单行数字、公式、标签要设 `max-width` 或缩短文案。
+- 不要靠固定高度或 `overflow:hidden` 把溢出“藏”起来，那等于裁字；优先拆屏或拆句。
+- 渲染前跑 `LAYOUT_CHECK=1 bash <skill>/scripts/render.sh 15 4`，或单独跑 `node <skill>/scripts/check_layout.mjs`。它会沿整条时间轴扫描越界、横向溢出、元素重叠和压字幕。
+- 抽帧 QA 必须包含每个场景的“最长句”时刻，不能只看短句帧。
 
 ### 6.2 视觉语法
 
@@ -431,10 +462,12 @@ bash <skill>/scripts/render.sh 15 4           # 分片渲染 + ffmpeg
 ```
 
 - `render.sh` 先检查 `script.json`、`scene.html`、`audio/full.wav`、`cues.js`、`subtitles.js`、`scene-data.js`，再按 `audio/full.wav` 时长分片渲染并合成 `<id>.mp4`。
+- `LAYOUT_CHECK=1` 会在渲染前跑 `check_layout.mjs`；发现文字越界、横向溢出、元素重叠或压字幕就直接失败。交付前至少跑一次。
+- 当前目录有 `watermark.json` 时，`render.sh` 会在编码前对 `frames/` 嵌入隐藏水印；`WATERMARK=0` 可临时关闭。见第 12 节。
 - `render_range.mjs` 检查 `window.TIMELINE/CUES/SUBTITLES` 是否加载，并收集 `missing cue`；有问题直接非零退出，不产出成片。
 - 图解、文字、公式类 15fps；连续位移、手写、实拍素材 30fps。JPEG quality 88–92。
 - 跑完核对成片时长与 `audio/full.wav` 一致（±0.1s）。
-- 改旁白/声音/段 id/`gap/lead/tail` 后必须全链路重跑。
+- 改旁白/声音/`speed`/段 id/`gap/lead/tail` 后必须全链路重跑。
 
 目录结构、ffmpeg 参数、分片规则、跨平台浏览器与依赖安装见 `references/rendering.md`。
 
@@ -470,11 +503,14 @@ ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,heig
 ```
 
 - 时长与 `audio/full.wav` 一致；分辨率符合约定；帧率符合预期；有 H.264 + AAC。
+- 跑 `node <skill>/scripts/check_layout.mjs`：没有越界、横向溢出、文字重叠、压字幕；检查必须覆盖最长文案时刻。
+- 有 `watermark.json` 时，对成片和一次 CRF 30 重编码副本都能提取出同一 mark。
 - 每个段落开头 + 中段 + 关键数字处抽帧，至少 10 张，逐张看：
   - 字幕文字是否就是该时刻旁白；
   - 高亮/数字是否已经切换；
   - 有没有文字重叠、裁切、空白场景；
-  - 底部字幕有没有压住正文。
+  - 底部字幕有没有压住正文；
+  - 字幕 ≥40px、正文 ≥32px；缩到约 25% 宽时仍能读出（模拟手机）。
 - 第一帧和最后一帧不能是空白或半透明过渡。
 - `subtitles.js` 条目数、SRT 条目数一致；无负时长、无跨段、无超宽。
 - 播放页里 `video.duration > 0`、`readyState >= 3`、`video.error === null`。
@@ -495,7 +531,7 @@ ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,heig
 8. **缺失 cue 返回 0**。所有缺失节拍堆在段首，看起来像“画面提前”；必须告警并阻止出片。
 9. **SVG 节点不设 transform**。所有 `<g>` 叠在原点，画面看起来“树消失了”。
 10. **例子数字不自洽**。先手算，再写代码；画面承诺的元素必须真实存在。
-11. **字幕压住正文或裁字**。正文底部至少留 150px；字幕允许两行，不要 `overflow: hidden` 裁掉。
+11. **字幕压住正文或裁字**。正文底部至少留 220px；字幕允许两行，不要 `overflow: hidden` 裁掉。
 12. **语言/音色/字幕上限不匹配**。英文课用了中文字幕上限，或者中文字体栈里没有对应字体。
 13. **视频显示 0s / 灰色按钮**。文件缺失、还在写入、`src` 路径错、缓存旧文件；先 `ffprobe`，再看 `video.error`。
 14. **字体没加载完就截图**。渲染前 `document.fonts.ready`，并额外等 300ms。
@@ -504,6 +540,10 @@ ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,heig
 17. **TTS 念代码/公式符号**。写口语化表达，先试听；画面里再显示原始符号。
 18. **拼接音频时给最后一段也补了 gap**。`timeline.total` 和 `full.wav` 会对不上，`-shortest` 截掉尾部；以 `ffprobe full.wav` 的实际时长为准。
 19. **批量生产**。第一讲没确认就做十讲，风格一错全部返工；先一讲，再批量。
+20. **按桌面字号做画面**。26px 字幕在电脑上清楚，手机上只有 5–11px；字幕固定 44px，正文 ≥32px，空间不够就拆句、拆屏，不要缩字。
+21. **提速只改了一半**。播放器倍速、只改 `rate`、只对音轨做 `atempo`、或者对成片提速后继续用旧 SRT，都会让声音和 cues/字幕/画面漂移；必须用 `script.json` 的 `speed` 让 `build_audio.py` 同步缩放，再全链路重跑。
+22. **字号放大了，却只用短占位词检查**。正文 34px 后，一句长句就可能把卡片撑破、压住公式或字幕；用最长真实文案跑 `check_layout.mjs`，不要用固定高度或 `overflow:hidden` 裁字。
+23. **把隐藏水印当 DRM，或重复嵌入**。同分辨率重压能扛，缩放/裁剪不保证；对已带标记的帧再嵌一次会让 alpha 叠加变可见，换标记必须重新渲染。
 
 ---
 
@@ -513,12 +553,35 @@ ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,heig
 
 - 成片路径、时长、分辨率、帧率、体积；
 - 字幕：内嵌 + SRT 路径；
-- 声音：音色、rate、pitch、语言；
+- 声音：音色、rate、pitch、语言、`speed`；
+- 隐藏水印：mark、是否已验证、验证命令；
 - 抽帧检查了哪些时间点，分别确认了什么；
 - 还有哪些存疑处（数字、发音、画面细节）；
 - 下一步建议（先看哪一段、先做哪些检查题）。
 
 不要擅自发布到外部平台；不要未经确认批量生产后续知识点。
+
+---
+
+## 12. 个人隐藏水印（可选）
+
+用户要“视频里有我的隐藏标记”时使用。完整参数、抗压测试和排错见 `references/watermark.md`。
+
+```bash
+# 1. 课程目录放 watermark.json（可从 references/watermark.example.json 复制；不要提交，含密钥）
+#    { "mark": "yobdcdoll", "key": "只有你知道的密钥", "alpha": 12 }
+# 2. 正常出片；render.sh 会自动在编码前嵌入
+bash <skill>/scripts/render.sh 15 4
+# 3. 验证
+python3 <skill>/scripts/watermark.py extract --video <id>.mp4 --config watermark.json
+```
+
+- 标记写进亮度通道的中频 DCT 系数，每帧重复；肉眼不可见，同分辨率重新压缩到 CRF 30–36 仍可提取。
+- 需要 `numpy` + `pillow`；`watermark.json` 含密钥，必须加进 `.gitignore`。
+- `mark` 最多 12 个 UTF-8 字节；身份较长时写短 ID。
+- **不保证**扛缩放、裁剪、旋转或极低码率；要覆盖这些场景需重新出片。它是溯源标记，不是 DRM。
+- 已经出好的 MP4 可用 `watermark.py embed-video` 补写，但会多一次 CRF 18 编码。
+- 换标记必须重渲染，不能在一个已带标记的成片上覆盖另一个标记。
 
 ---
 
@@ -529,6 +592,8 @@ ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,heig
 - `references/pipeline-contract.md` — `full.wav` / `timeline.json` / `cues.json` 契约与替换 TTS 的方法
 - `references/rendering.md` — 目录结构、ffmpeg 参数、分片规则、跨平台环境
 - `references/qa-checklist.md` — 出片前逐项检查清单
+- `references/watermark.md` — 个人隐藏水印的原理、参数、抗压范围与排错
+- `references/watermark.example.json` — `watermark.json` 模板
 - `references/player-template.html` — 播放页骨架（视频、看前/看后检查、复习日期、自评导出）
 - `references/scene-template.html` — 可直接改的 `renderAt(t)` 场景骨架（含字幕、cue、场景切换）
 - `references/domains/cs.md` — 计算机类知识点的槽位映射、代码读法、HashMap 示例
@@ -537,5 +602,7 @@ ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,heig
 - `scripts/build_subtitles.mjs` — 生成 `cues.js`、`subtitles.js`、SRT
 - `scripts/calibrate.py` — 标定目标音色的实际语速和时长预算
 - `scripts/voice_presets.py` — 语音预设（`xiaoxiao-calm` 等）与音色解析
+- `scripts/watermark.py` — 不可见 DCT 水印的嵌入与提取
+- `scripts/check_layout.mjs` — 沿时间轴检查文字越界、溢出、重叠和压字幕
 - `scripts/render_range.mjs` — 按帧区间渲染
 - `scripts/render.sh` — 并行分片渲染 + ffmpeg 合成

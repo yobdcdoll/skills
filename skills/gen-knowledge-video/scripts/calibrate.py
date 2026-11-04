@@ -5,8 +5,9 @@ Usage (from the lesson directory):
     python3 calibrate.py
     python3 calibrate.py --voice en-US-AriaNeural --rate -8% --pitch 0Hz --lang en-US
 
-Reads preset/voice/rate/pitch/lang from script.json when present. Synthesizes one
-standard sample, measures its duration with ffprobe, and prints:
+Reads preset/voice/rate/pitch/lang/speed from script.json when present. Synthesizes
+one standard sample, applies the same speed factor build_audio.py uses, measures
+its duration with ffprobe, and prints:
   - characters per second (including punctuation)
   - CJK characters per second, or words per second for space-delimited languages
   - narration budgets for 4/6/8/10/12/15/18 minute lessons
@@ -112,6 +113,10 @@ async def main() -> None:
     parser.add_argument("--lang", default=lang)
     parser.add_argument("--sample", help="text to synthesize instead of the built-in sample")
     parser.add_argument(
+        "--speed", type=float, default=float(meta.get("speed", 1.24)),
+        help="narration speed used by build_audio.py (default 1.24)"
+    )
+    parser.add_argument(
         "--lead", type=float, default=float(meta.get("lead", 0.8)),
         help="seconds of silence at the start (default 0.8)"
     )
@@ -146,6 +151,11 @@ async def main() -> None:
             sys.exit(f"TTS failed: {exc}")
         duration = probe_duration(mp3)
 
+    if not 0.5 <= args.speed <= 2.0:
+        sys.exit("speed must be between 0.5 and 2.0 (atempo range)")
+    # build_audio.py applies atempo; atempo changes duration exactly by 1/speed.
+    duration /= args.speed
+
     total_chars = len(sample)
     char_rate = total_chars / duration
     unit_rate = units / duration
@@ -156,6 +166,7 @@ async def main() -> None:
     print(f"preset     {meta.get('preset') or '(language default)'}")
     print(f"voice      {args.voice}")
     print(f"rate/pitch {args.rate} / {args.pitch}")
+    print(f"atempo     {args.speed:.2f}x (applied by build_audio.py)")
     print(f"lang       {args.lang}")
     print(f"sample     {total_chars} chars, {units} {unit_name}, {duration:.2f}s")
     print(f"speed      {char_rate:.2f} chars/s (with punctuation), "

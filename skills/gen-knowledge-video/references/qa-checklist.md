@@ -20,6 +20,19 @@ ffprobe -v error -show_entries format=duration \
 - [ ] `<id>.srt` 非空，首条不早于 `lead`，末条不超过视频时长。
 - [ ] `cues.js`、`subtitles.js`、`scene-data.js` 均存在且非空。
 
+### 1.1 隐藏水印（如果启用了 watermark.json）
+
+```bash
+python3 <skill>/scripts/watermark.py extract --video <id>.mp4 --config watermark.json
+ffmpeg -y -v error -i <id>.mp4 -c:v libx264 -crf 30 -pix_fmt yuv420p /tmp/<id>-re30.mp4
+python3 <skill>/scripts/watermark.py extract --video /tmp/<id>-re30.mp4 --config watermark.json
+```
+
+- [ ] 成片能提取出正确 mark，`crc_ok: true`。
+- [ ] CRF 30 重编码副本仍能提取出同一个 mark。
+- [ ] `watermark.json` 没有提交进仓库（含密钥）。
+- [ ] `frames/.watermark.json` 显示 `complete: true`，没有重复嵌入。
+
 ## 2. 帧完整性
 
 ```bash
@@ -45,7 +58,11 @@ ffmpeg -v error -y -ss <time> -i <id>.mp4 -frames:v 1 check/t<time>.jpg
 - [ ] 数字 = 旁白刚说出的数字。
 - [ ] 场景 = 该段落，没有提前/延后。
 - [ ] 没有文字重叠、裁切、溢出画布。
+- [ ] 用**最长真实文案**跑过 `node <skill>/scripts/check_layout.mjs`，无越界、横向溢出、元素重叠或压字幕。
+- [ ] 每个场景至少抽一张“文字最多”的帧，确认没有裁字、叠字、文字被卡片边界切断。
 - [ ] 底部字幕没有压住正文/代码/图示/公式。
+- [ ] 字幕字号 ≥40px（默认 44px），正文 ≥32px，小标签 ≥18px。
+- [ ] 把浏览器缩放到约 25% 宽（模拟手机竖屏）时，字幕仍能读出；横屏全屏时正文不费力。
 - [ ] 中文没有变方块，字体已加载。
 - [ ] 箭头、连线、树的节点位置正确（没有全叠在原点）。
 
@@ -75,7 +92,7 @@ console.log({count:subs.length,bad,long:long.length,max:Math.max(...subs.map(x=>
 ```
 
 - [ ] 无负时长、无大面积重叠。
-- [ ] 最长字幕条能在 1500px 内放下（允许两行）；超长已拆句。阈值按 `subtitle.max_cjk` / `subtitle.max_latin` 调整。
+- [ ] 最长字幕条能在 1600px 内放下（允许两行）；超长已拆句。阈值按 `subtitle.max_cjk` / `subtitle.max_latin` 调整。
 - [ ] 专有名词、数字、代码标识符、公式人工核对过。
 - [ ] 字幕语言与课程语言一致，字体能正常显示该语言。
 - [ ] `subtitles.js` 与 SRT 条数一致。
@@ -119,6 +136,7 @@ const v = document.querySelector('video');
 ## 7. 最终人工观看
 
 - [ ] 从头到尾至少看一遍，速度 1.0。
+- [ ] 在手机上（或缩到 25% 宽）看一遍，确认字幕和正文不用眯眼。
 - [ ] 重点看段落切换处：有没有一帧空白、两层画面叠加、字幕突然消失。
 - [ ] 听一遍音频：有没有吞字、重复、突然变调、段间静音过长。
 - [ ] 结尾没有截断。
@@ -127,7 +145,8 @@ const v = document.querySelector('video');
 
 - [ ] 成片路径、时长、分辨率、帧率、体积。
 - [ ] 内嵌字幕 + SRT 路径。
-- [ ] 音色 / rate / pitch。
+- [ ] 音色 / rate / pitch / speed。
+- [ ] 隐藏水印的 mark、验证方式、抗压测试结果。
 - [ ] 抽帧检查了哪些时间点，分别确认了什么。
 - [ ] 明确列出仍存疑的数字/发音/画面。
 - [ ] 未经确认不批量生产后续知识点。

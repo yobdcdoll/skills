@@ -9,8 +9,11 @@
 #   CRF=20           x264 quality (lower = better/larger)
 #   PRESET=veryfast  x264 preset
 #   FORCE=1          delete a non-empty frames/ before rendering
+#   LAYOUT_CHECK=1   run check_layout.mjs before rendering (fails on overflow)
+#   WATERMARK=0      skip watermark.json embedding even when the file exists
 #
 # Requires: node, python3, ffmpeg, ffprobe, Playwright (or BROWSER_PATH).
+# watermark.json additionally requires numpy + pillow.
 
 set -euo pipefail
 
@@ -46,6 +49,18 @@ for f in script.json scene.html audio/full.wav cues.js subtitles.js scene-data.j
     exit 2
   fi
 done
+
+if [ "${LAYOUT_CHECK:-0}" = "1" ]; then
+  echo "checking text layout against longest real copy ..."
+  node "$SCRIPT_DIR/check_layout.mjs" || exit 1
+fi
+
+if [ -f watermark.json ] && [ "${WATERMARK:-1}" != "0" ]; then
+  python3 -c "import numpy, PIL" 2>/dev/null || {
+    echo "watermark.json found but numpy/pillow are missing: python3 -m pip install numpy pillow" >&2
+    exit 2
+  }
+fi
 
 ID="$(python3 -c 'import json; print(json.load(open("script.json")).get("id") or "lesson")')"
 OUT="${OUT:-${ID}.mp4}"
@@ -95,6 +110,11 @@ GOT="$(find frames -name 'f*.jpg' | wc -l | tr -d ' ')"
 if [ "$GOT" -ne "$FRAMES" ]; then
   echo "expected ${FRAMES} frames, got ${GOT}" >&2
   exit 1
+fi
+
+if [ -f watermark.json ] && [ "${WATERMARK:-1}" != "0" ]; then
+  echo "embedding invisible watermark from watermark.json ..."
+  python3 "$SCRIPT_DIR/watermark.py" embed-frames --frames frames --config watermark.json
 fi
 
 ffmpeg -y -framerate "$FPS" -i frames/f%05d.jpg -i audio/full.wav \

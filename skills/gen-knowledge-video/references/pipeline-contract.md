@@ -24,6 +24,7 @@ cues.json             # 每段的句级时间码（段内相对）
   "voice": "zh-CN-XiaoxiaoNeural",
   "rate": "-12%",
   "pitch": "-6Hz",
+  "speed": 1.24,
   "total": 483.2,
   "lead": 0.8,
   "gap": 0.35,
@@ -45,6 +46,7 @@ cues.json             # 每段的句级时间码（段内相对）
 约束：
 
 - `preset` 只记录选用的预设名；实际进入合成的是 `voice` / `rate` / `pitch`。
+- `speed` 记录成片实际使用的语速倍率（默认 1.24）；`audio/<segment>.wav` 已经是提速后的音频，下游不要再乘一次。
 - `segments[].id` 唯一，且与 `script.json` 一致。
 - `start/end` 单调递增，不重叠。
 - `total` 必须等于 `ffprobe audio/full.wav` 的实际时长，不是估算值。
@@ -66,6 +68,7 @@ cues.json             # 每段的句级时间码（段内相对）
 约束：
 
 - 时间段是**相对该段音频开头**的，不是成片绝对时间。
+- 如果设置了 `speed`，这里的时间码必须是**提速后音频**的时间码；不要给下游留下“还需要再乘 1.24”的隐含约定。
 - 每段至少 1 句；为零时 `build_subtitles.mjs` 和渲染都会警告。
 - 句边界来自同一次合成/对齐；`sentence.end` 允许比下一句 `start` 早 50ms 左右的重叠，超过 80ms 视为异常。
 - `words` 可以为空；中文常常为空，不要依赖它做对齐。
@@ -75,9 +78,10 @@ cues.json             # 每段的句级时间码（段内相对）
 保留 `script.json` 的分段文本和 `audio/full.wav` 的拼接方式即可。新 TTS 必须：
 
 1. 对每段单独合成，并在**同一次合成**中拿到句级时间码；
-2. 按 `lead / gap / tail` 拼接成 `audio/full.wav`；
-3. 用实际音频时长写 `timeline.total`；
-4. 产出与上面 schema 一致的 `timeline.json` 和 `cues.json`。
+2. 如果做变速，先变速音频，再用**实测时长比例**缩放时间码；不要用名义倍率硬除；
+3. 按 `lead / gap / tail` 拼接成 `audio/full.wav`；
+4. 用实际音频时长写 `timeline.total`；
+5. 产出与上面 schema 一致的 `timeline.json` 和 `cues.json`。
 
 如果新 TTS 不返回句级时间码，就不要用它直接出片；先做强制对齐。
 
