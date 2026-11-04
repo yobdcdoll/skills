@@ -9,6 +9,30 @@
   },
   "plugins": [
     {
+      "name": "yobdcdoll-skills",
+      "source": "./",
+      "description": "All three skills bundled: exam restoration, GitHub IP diagnostics, and knowledge-point explainer videos.",
+      "version": "2.1.0",
+      "author": {
+        "name": "yobdcdoll"
+      },
+      "repository": "https://github.com/yobdcdoll/skills",
+      "keywords": [
+        "education",
+        "exam",
+        "ocr",
+        "pdf",
+        "github",
+        "hosts",
+        "dns",
+        "video",
+        "teaching",
+        "explainer",
+        "tts",
+        "subtitles"
+      ]
+    },
+    {
       "name": "exam-clean",
       "source": "./skills/exam-clean",
       "description": "Restore photographed exams into clean, printable PDFs without handwritten answers.",

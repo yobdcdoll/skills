@@ -7,6 +7,26 @@
   "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, and general knowledge-point explainer videos.",
   "plugins": [
     {
+      "name": "yobdcdoll-skills",
+      "source": "./",
+      "description": "All three skills bundled: exam restoration, GitHub IP diagnostics, and knowledge-point explainer videos.",
+      "category": "productivity",
+      "keywords": [
+        "education",
+        "exam",
+        "ocr",
+        "pdf",
+        "github",
+        "hosts",
+        "dns",
+        "video",
+        "teaching",
+        "explainer",
+        "tts",
+        "subtitles"
+      ]
+    },
+    {
       "name": "exam-clean",
       "source": "./skills/exam-clean",
       "description": "Restore photographed exams into clean, printable PDFs without handwritten answers.",
