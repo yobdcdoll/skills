@@ -4,12 +4,12 @@
     "name": "yobdcdoll",
     "url": "https://github.com/yobdcdoll"
   },
-  "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, and general knowledge-point explainer videos.",
+  "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, knowledge-point explainer videos, and Bilibili publishing.",
   "plugins": [
     {
       "name": "yobdcdoll-skills",
       "source": "./",
-      "description": "All three skills bundled: exam restoration, GitHub IP diagnostics, and knowledge-point explainer videos.",
+      "description": "All four skills bundled: exam restoration, GitHub IP diagnostics, knowledge-point explainer videos, and Bilibili publishing.",
       "category": "productivity",
       "keywords": [
         "education",
@@ -23,7 +23,12 @@
         "teaching",
         "explainer",
         "tts",
-        "subtitles"
+        "subtitles",
+        "bilibili",
+        "biliup",
+        "upload",
+        "publishing",
+        "cli"
       ]
     },
     {
@@ -65,6 +70,20 @@
         "edge-tts",
         "subtitles",
         "playwright"
+      ]
+    },
+    {
+      "name": "biliup",
+      "source": "./skills/biliup",
+      "description": "Upload, inspect, and manage Bilibili videos with the biliup CLI, including metadata, status checks, and rate-limit handling.",
+      "category": "productivity",
+      "keywords": [
+        "bilibili",
+        "biliup",
+        "upload",
+        "video",
+        "publishing",
+        "cli"
       ]
     }
   ]

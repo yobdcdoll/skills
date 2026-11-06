@@ -1,0 +1,22 @@
+{
+  "name": "biliup",
+  "version": "1.1.0",
+  "description": "Upload, inspect, and manage Bilibili videos with the biliup CLI, including metadata, status checks, and rate-limit handling.",
+  "author": {
+    "name": "yobdcdoll",
+    "url": "https://github.com/yobdcdoll"
+  },
+  "homepage": "https://github.com/yobdcdoll/skills",
+  "repository": "https://github.com/yobdcdoll/skills",
+  "keywords": [
+    "bilibili",
+    "biliup",
+    "upload",
+    "video",
+    "publishing",
+    "cli"
+  ],
+  "skills": [
+    "./"
+  ]
+}
