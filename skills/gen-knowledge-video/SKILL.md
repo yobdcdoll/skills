@@ -2,7 +2,7 @@
 name: gen-knowledge-video
 description: 把任意知识点或技能点做成可自学的教学视频（旁白 + 画面 + 内嵌字幕 + SRT + 播放页 + 复习节奏）。当用户要求为某个概念、原理、机制、操作步骤、语言发音或考试知识点做讲解视频、教学视频、微课、科普视频，或把讲义、脚本、样片做成 4–20 分钟成片时使用；尤其适用于画面、语音、字幕需要逐句对齐的场景。需要给成片加不可见、可抗同分辨率二次压缩的个人水印时也使用。
 metadata:
-  version: 1.3.4
+  version: 1.3.5
 ---
 
 # 知识点 / 技能点教学视频
@@ -10,6 +10,8 @@ metadata:
 把**一个**知识点或技能点做成一套能自学的课：视频 + 播放页 + 看前/看后检查 + 24h/3d/7d 复习节奏。时长按内容定，通常 4–12 分钟；内容确实多时可到 20 分钟，**不要把短知识点硬拉长**。
 
 这不是把 PPT 录屏，也不是把讲稿念一遍。核心是把知识拆成一条**可看、可听、可复述**的因果链，并让画面严格跟着旁白走。
+
+代码类知识点还有一条硬要求：**画面里必须出现代码本体和真实输出**；只讲定义、原理或口述，不算讲完。见 2.2.1。
 
 适用：概念解释、原理机制、操作步骤、语言发音、理科推导、历史事件、工具用法等。
 不适用：纯素材剪辑、真人出镜拍摄、以实拍为主的 vlog。这类只借用本技能的时间码/字幕/渲染管线，不要套课程骨架。
@@ -31,12 +33,13 @@ mkdir my-lesson && cd my-lesson
 # 0. 可选：先标定目标音色的实际语速，用来估字数
 python3 <skill>/scripts/calibrate.py
 
-# 1. 写 script.json（结构见第 2.4 节；先定 lang、target_minutes、speed、槽位）
+# 1. 写 script.json（结构见第 2.4 节；先定 kind、lang、target_minutes、speed、槽位）
+#    代码类知识点先过第 2.2.1 节：先定代码计划，再写旁白
 # 2. 一次 TTS：音频 + timeline + cues
 python3 <skill>/scripts/build_audio.py
 # 3. 字幕
 node <skill>/scripts/build_subtitles.mjs
-# 4. 复制 references/scene-template.html 为 scene.html，按你的槽位改
+# 4. 复制 references/scene-template.html 为 scene.html（代码类用 code-scene-template.html）
 # 5. 逐帧渲染 + 编码（15fps，4 个分片；有 watermark.json 会自动嵌入水印）
 bash <skill>/scripts/render.sh 15 4
 # 6. 按 references/qa-checklist.md 抽帧检查，再改 index.html
@@ -79,6 +82,8 @@ bash <skill>/scripts/render.sh 15 4
 | 05 | `boundary` | 什么时候不成立、容易错？ | 45–90s |
 | 06 | `apply` | 怎么用、怎么选？ | 45–90s |
 | 07 | `recap` | 带走什么？ | 30–50s |
+
+代码类的 `example` 是硬槽位：必须有代码块 + 真实输出；数字推演和流程图只能辅助，不能替代（见 2.2.1）。
 
 可选模块：`context`、`compare`、`derive`、`misconception`、`practice`、`extension`、`interview`、`history`、`demo`、`pronunciation`。按知识点类型拼装，不要为了凑时长全加。
 
@@ -125,11 +130,30 @@ python3 <skill>/scripts/calibrate.py
 - 短句优先。中文知识内容 20–35 字一句；英文 12–22 词一句。
 - 先给结论，再给原因；先给直觉，再给术语。
 - 术语第一次出现时，用一句人话解释，不要直接堆缩写。
-- **代码类知识点必须配“可写可用”的例子**：至少一个最小可运行片段，展示完整语法、放在哪个类/方法、怎么调用、输入和输出是什么。例子可以简单，但要**完整、丰富**：完整上下文 + 真实输入输出 + 至少一个变式或边界；不要只给孤立的一行，也不要堆成一个项目。不要只讲定义、原理或伪代码；先给能跑的例子，再抽象规则。
+- **代码类知识点必须配“可写可用”的例子**：完整契约见 2.2.1。最低限度是画面里同时出现代码本体和真实输出，不能只讲定义、原理或伪代码。
 - **视频是唯一 output**：不要在旁白或画面里说“源码在 GitHub / 仓库 / 课程页 / 简介 / 评论区”，也不要把关键内容留给外部资料。需要的代码、输入、输出、结论都必须在视频里出现；代码太长就拆场景，不要指路。
 - 不逐行念代码、公式或表格。念**意图**：“先看表为空不空”，而不是“if table equals null resize”。
 - 数字要具体：“容量 16，阈值 12，第 13 个元素触发扩容”，不要“容量比较小的时候”。
 - 每段结尾留一句过渡，把下一段接上。
+
+### 2.2.1 代码类知识点的硬性契约
+
+只要知识点涉及**写代码、调 API、改配置、用命令行**，就按代码类处理：`script.json` 设 `"kind": "code"`。判定标准不是“旁白里提到了代码”，而是**抽帧里能同时看到代码本体和真实输出**。
+
+顺序不能反：
+
+1. **先写代码计划，再写旁白**。在 lesson 目录写 `code-plan.md`（或写进脚本备注），列清：
+   - 本讲要讲的 1–3 个代码动作（例：`put` 的调用、扩容触发）；
+   - 每个动作的完整上下文：import、类、方法签名、调用现场；
+   - 输入是什么，真实输出是什么；
+   - 至少一个变式或边界；
+   - 每个代码块放在哪个 segment（默认 `example`）。
+   这张表没写完，不要开始写旁白——旁白一旦 TTS 就锁定，后面补代码要全链路重跑。
+2. **画面必须有代码块**：至少一个 `<pre class="code">`，5–14 个非空行，含调用现场；旁边或下方用 `<pre class="code-out">` 显示真实输出（或终端/运行结果截图）。数字表格、流程图、伪代码、口述都不算代码例子。
+3. **旁白逐句对代码**：每句对应一次高亮行或状态变化，顺序是“输入 → 这行做什么 → 输出/状态变成什么”。不要逐行念语法，也不要跳过代码只讲概念。
+4. **能跑就跑**：能运行就运行，画面写真实输出；不能运行时明确说“示意代码”，但语义仍要完整。
+5. **放不下就拆场景**：一屏最多 14 行（建议 5–14 行）；超过就拆成“最小调用 + 变式”，不要缩字号，也不要外链。
+6. **出片前过门禁**：`node <skill>/scripts/check_code_samples.mjs`；`kind: "code"` 时 `render.sh` 会自动跑，不通过不出片。模板见 `references/code-scene-template.html`。
 
 ### 2.3 代码、公式与符号的读法
 
@@ -162,6 +186,7 @@ TTS 念符号经常翻车。脚本里写**口语化写法**，不要把手写符
 {
   "id": "compound-interest",
   "title": "复利",
+  "kind": "concept",
   "lang": "zh-CN",
   "audience": "高中生",
   "target_minutes": 8,
@@ -184,6 +209,7 @@ TTS 念符号经常翻车。脚本里写**口语化写法**，不要把手写符
 ```
 
 - `id` 只能用字母、数字、下划线、连字符，且不能重复；一旦定下就不要改：场景、cues、字幕、文件名都依赖它。
+- `kind` 决定内容类型，默认 `concept`。涉及写代码、调 API、改配置、命令行时**必须写 `code`**；否则 `render.sh` 不会运行代码门禁，代码可能只活在旁白里。其它取值可用 `skill`、`math`、`language`、`concept`。
 - `role` 用于指导脚本和模板选择，渲染脚本不会读它；可以省略。
 - `lang` 影响字幕切分、字体和播放页文案。
 - `preset` 选语音预设，中文默认 `xiaoxiao-calm`；显式 `voice` / `rate` / `pitch` 会覆盖预设。预设定义见 `scripts/voice_presets.py`。
@@ -391,6 +417,7 @@ node <skill>/scripts/build_subtitles.mjs
 | 字幕 | 44px（下限 40px） |
 | 正文、说明、列表 | 32–34px |
 | 表格单元、步骤文字 | 30–34px |
+| 代码块 | 30–32px（一屏 ≤14 行） |
 | 关键数字、公式 | 50–60px |
 | 小标签、章节名、时间码 | 18px（不要低于 16px） |
 
@@ -414,7 +441,7 @@ node <skill>/scripts/build_subtitles.mjs
 - 图示元素出现要有顺序：先容器，再元素，再连线，最后结论。
 - 动画时长短：0.4–0.8s；不要弹跳、旋转、闪烁。
 - 两个强调色足够（例如蓝=主路径，橙=冲突/异常）；绿色/红色只用于对错结论。
-- 默认用图解、表格、公式和数字说话。需要“人”时用抽象图标；操作技能可用无名的手部/实物特写或自绘素材，避免真人肖像。
+- 默认用图解、表格、公式和数字说话。**代码类例外：代码本体和真实输出必须是画面主角**，图解只做辅助，不能替代代码。需要“人”时用抽象图标；操作技能可用无名的手部/实物特写或自绘素材，避免真人肖像。
 
 ### 6.3 确定性
 
@@ -472,6 +499,7 @@ bash <skill>/scripts/render.sh 15 4           # 分片渲染 + ffmpeg
 ```
 
 - `render.sh` 先检查 `script.json`、`scene.html`、`audio/full.wav`、`cues.js`、`subtitles.js`、`scene-data.js`，再按 `audio/full.wav` 时长分片渲染并合成 `<id>.mp4`。
+- `script.json` 的 `kind` 为 `code` 时自动跑 `check_code_samples.mjs`：没有代码块、代码少于 5 行、没有真实输出，都直接失败。
 - `LAYOUT_CHECK=1` 会在渲染前跑 `check_layout.mjs`；发现文字越界、横向溢出、元素重叠或压字幕就直接失败。交付前至少跑一次。
 - 当前目录有 `watermark.json` 时，`render.sh` 会在编码前对 `frames/` 嵌入隐藏水印；`WATERMARK=0` 可临时关闭。见第 12 节。
 - `render_range.mjs` 检查 `window.TIMELINE/CUES/SUBTITLES` 是否加载，并收集 `missing cue`；有问题直接非零退出，不产出成片。
@@ -479,7 +507,7 @@ bash <skill>/scripts/render.sh 15 4           # 分片渲染 + ffmpeg
 - 跑完核对成片时长与 `audio/full.wav` 一致（±0.1s）。
 - 改旁白/声音/`speed`/段 id/`gap/lead/tail` 后必须全链路重跑。
 
-目录结构、ffmpeg 参数、分片规则、跨平台浏览器与依赖安装见 `references/rendering.md`。
+目录结构、ffmpeg 参数、分片规则、代码样例检查、跨平台浏览器与依赖安装见 `references/rendering.md`。
 
 ---
 
@@ -514,10 +542,12 @@ ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,heig
 
 - 时长与 `audio/full.wav` 一致；分辨率符合约定；帧率符合预期；有 H.264 + AAC。
 - 跑 `node <skill>/scripts/check_layout.mjs`：没有越界、横向溢出、文字重叠、压字幕；检查必须覆盖最长文案时刻。
+- 代码类：`script.json.kind === "code"` 时 `node <skill>/scripts/check_code_samples.mjs` 必须通过；抽帧至少一张同时看到代码本体（≥5 行、含调用现场）和真实输出。
 - 有 `watermark.json` 时，对成片和一次 CRF 30 重编码副本都能提取出同一 mark。
 - 每个段落开头 + 中段 + 关键数字处抽帧，至少 10 张，逐张看：
   - 字幕文字是否就是该时刻旁白；
   - 高亮/数字是否已经切换；
+  - 代码类的当前行高亮是否跟着旁白走，代码和输出是否同屏；
   - 有没有文字重叠、裁切、空白场景；
   - 底部字幕有没有压住正文；
   - 字幕 ≥40px、正文 ≥32px；缩到约 25% 宽时仍能读出（模拟手机）。
@@ -553,10 +583,10 @@ ffprobe -v error -show_entries format=duration,size:stream=codec_name,width,heig
 20. **按桌面字号做画面**。26px 字幕在电脑上清楚，手机上只有 5–11px；字幕固定 44px，正文 ≥32px，空间不够就拆句、拆屏，不要缩字。
 21. **提速只改了一半**。播放器倍速、只改 `rate`、只对音轨做 `atempo`、或者对成片提速后继续用旧 SRT，都会让声音和 cues/字幕/画面漂移；必须用 `script.json` 的 `speed` 让 `build_audio.py` 同步缩放，再全链路重跑。
 22. **英文缩写只写缩写**。一个视频中第一次出现时必须写 `API（Application Programming Interface）` 这种“缩写 + 完整英文”，旁白念全称；之后才可只用缩写。整讲只展开一次，不要每个场景重复。
-23. **代码课只讲概念**。只给定义、原理或伪代码，观众记住的是名词，不会写。每个代码知识点至少给一个“怎么写 + 怎么用 + 输出是什么”的最小例子；例子可以简单，但要完整、丰富（完整上下文 + 真实输入输出 + 一个变式或边界），必要时用“错 → 为什么错 → 改成什么”对照。
+23. **代码课只讲概念，或只在旁白里提代码**。只给定义、原理、数字表格、流程图、伪代码或口述，观众记住的是名词，不会写。代码类必须设 `kind: "code"`，画面里同时有 5–14 行含调用现场的代码和真实输出；旁白每句对应一次高亮或状态变化。`check_code_samples.mjs` 不通过就不出片。
 24. **在视频里给源码指路**。“完整代码见 GitHub / 仓库 / 简介链接”会让视频离开上下文就失效；视频是唯一 output，所有必要代码和结论都要在画面里。代码太长就拆场景，不要外链。
-22. **字号放大了，却只用短占位词检查**。正文 34px 后，一句长句就可能把卡片撑破、压住公式或字幕；用最长真实文案跑 `check_layout.mjs`，不要用固定高度或 `overflow:hidden` 裁字。
-23. **把隐藏水印当 DRM，或重复嵌入**。同分辨率重压能扛，缩放/裁剪不保证；对已带标记的帧再嵌一次会让 alpha 叠加变可见，换标记必须重新渲染。
+25. **字号放大了，却只用短占位词检查**。正文 34px 后，一句长句就可能把卡片撑破、压住公式或字幕；用最长真实文案跑 `check_layout.mjs`，不要用固定高度或 `overflow:hidden` 裁字。
+26. **把隐藏水印当 DRM，或重复嵌入**。同分辨率重压能扛，缩放/裁剪不保证；对已带标记的帧再嵌一次会让 alpha 叠加变可见，换标记必须重新渲染。
 
 ---
 
@@ -603,12 +633,13 @@ python3 <skill>/scripts/watermark.py extract --video <id>.mp4 --config watermark
 - `references/lesson-arc.md` — 必选槽位、可选模块、时长分档、跨领域示例、检查题设计
 - `references/visual-grammar.md` — 画面原型、公式与符号、技能类素材边界、最小片段
 - `references/pipeline-contract.md` — `full.wav` / `timeline.json` / `cues.json` 契约与替换 TTS 的方法
-- `references/rendering.md` — 目录结构、ffmpeg 参数、分片规则、跨平台环境
+- `references/rendering.md` — 目录结构、ffmpeg 参数、分片规则、代码样例检查、跨平台环境
 - `references/qa-checklist.md` — 出片前逐项检查清单
 - `references/watermark.md` — 个人隐藏水印的原理、参数、抗压范围与排错
 - `references/watermark.example.json` — `watermark.json` 模板
 - `references/player-template.html` — 播放页骨架（视频、看前/看后检查、复习日期、自评导出）
 - `references/scene-template.html` — 可直接改的 `renderAt(t)` 场景骨架（含字幕、cue、场景切换）
+- `references/code-scene-template.html` — 代码类场景骨架（代码卡、逐行高亮、实时状态、真实输出）
 - `references/domains/cs.md` — 计算机类知识点的槽位映射、代码读法、HashMap 示例
 - `references/domains/math-science.md` — 公式念法、推导、单位、演算类画面
 - `scripts/build_audio.py` — 一次 TTS 同时产出音频、timeline、cues
@@ -617,5 +648,6 @@ python3 <skill>/scripts/watermark.py extract --video <id>.mp4 --config watermark
 - `scripts/voice_presets.py` — 语音预设（`xiaoxiao-calm` 等）与音色解析
 - `scripts/watermark.py` — 不可见 DCT 水印的嵌入与提取
 - `scripts/check_layout.mjs` — 沿时间轴检查文字越界、溢出、重叠和压字幕
+- `scripts/check_code_samples.mjs` — 代码类门禁：检查画面里有代码块、完整上下文、真实输出
 - `scripts/render_range.mjs` — 按帧区间渲染
 - `scripts/render.sh` — 并行分片渲染 + ffmpeg 合成

@@ -28,11 +28,11 @@
 - 动画 0.4–0.8s；不要弹跳、旋转、闪烁。
 - 两个强调色足够；绿色/红色只用于对错结论。
 - 数字必须具体，并且和旁白同一时刻切换。
-- 代码只亮当前行；公式只亮当前项；表格只亮当前行/列。
+- 代码只亮当前行；公式只亮当前项；表格只亮当前行/列。代码类必须让**代码本体和真实输出同屏**，不能只画流程图或数字表。
 - 画面里承诺存在的元素必须真实存在（第 17 个桶、第 5 年、第三阶段）。
 - 页眉只写课程系列名或知识点名，**不要写课程序号**（LESSON 01、第 1 讲、EP01）。序号会随重排、单独发布、拆条而过期。
 - 英文缩写**首次出现时画面写完整形式**：`API（Application Programming Interface）`；后续只写 `API`。整讲只展开一次，旁白首次念全称。
-- 代码知识点先给一个最小可运行例子，再讲抽象；例子可以简单，但要有完整上下文、真实输入输出和一个变式或边界。
+- 代码知识点先给一个最小可运行例子，再讲抽象。画面里要有 5–14 行、含调用现场的代码块，以及非空的真实输出块；数字表格、流程图、伪代码都不能替代。例子还要有一个变式或边界。
 - 视频是唯一 output：不要把必要代码或结论指到 GitHub、仓库、课程页或简介链接；内容必须在画面里。
 - **字号按手机可读性定，不按“桌面看着舒服”定**：正文 ≥32px，表格 ≥30px，说明/标签 ≥18px，字幕 44px。空间不够时先删内容，不要先缩字。
 - 一屏装不下时，优先拆成两屏或两行，不要靠 24px 以下的字硬塞。
@@ -179,12 +179,39 @@ function renderFormula(t) {
 </style>
 ```
 
+### 5.6 代码块与输出
+
+完整可用场景见 `code-scene-template.html`；最小结构：
+
+```html
+<div class="code-card">
+  <div class="k">JAVA · PUT DEMO</div>
+  <pre class="code" id="ex-code" data-segment="example"><span class="cl" data-cue="0">import java.util.HashMap;</span><span class="cl" data-cue="0">Map&lt;String, Integer&gt; map = new HashMap&lt;&gt;();</span><span class="cl" data-cue="1">for (int i = 1; i &lt;= 13; i++) {</span><span class="cl" data-cue="2">    map.put("user_" + i, i);</span><span class="cl" data-cue="3">}</span></pre>
+</div>
+<pre class="code-out" id="ex-out" data-for="ex-code">13</pre>
+<style>
+.code-card{width:1100px;padding:20px 22px;background:var(--ink);border-radius:16px;}
+.code-card .k{font:600 18px/1.2 var(--mono);letter-spacing:.14em;color:#9CA3AF;}
+pre.code{margin:10px 0 0;font:400 30px/1.28 var(--mono);color:var(--paper);white-space:pre;}
+pre.code .cl{display:block;padding:0 10px;border-radius:6px;}
+pre.code .cl.on{background:rgba(37,99,235,.55);}
+.code-out{padding:22px 26px;background:var(--ink);color:#86EFAC;
+  font:400 40px/1.3 var(--mono);border-radius:14px;}
+</style>
+```
+
+- 一行一个 `.cl`；`data-cue` 是该行开始高亮的旁白句号，当前行高亮、已执行行降级。
+- 5–14 个非空行；必须有 import/类/方法/调用现场中的必要上下文，不能只放一行表达式。
+- 输出块必须真实、非空；可以来自运行结果、终端截图或测试输出。
+- 代码类设 `script.json.kind = "code"`，否则 `check_code_samples.mjs` 不会拦截。
+
 ## 6. 常见错误
 
 - 一屏塞两个结论，观众不知道看哪。
 - 所有元素同时出现，旁白还没讲到就剧透。
 - 用颜色表达流程、用位置表达状态，语义和直觉相反。
 - 公式只放截图，无法逐项高亮，也不好改字号。
+- 代码只口述、只放伪代码或数字表格，画面里没有代码本体和真实输出。
 - 数字和旁白不同步；旁白说“30 年”，画面还停在 20 年。
 - 实拍素材露脸、有品牌或隐私信息。
 - 动画超过 1 秒，或使用弹跳/闪烁吸引注意。

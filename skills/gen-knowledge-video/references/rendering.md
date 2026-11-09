@@ -41,12 +41,13 @@ bash <skill>/scripts/render.sh 15 4           # 分片渲染 + ffmpeg
 
 1. 检查 `script.json`、`scene.html`、`audio/full.wav`、`cues.js`、`subtitles.js`、`scene-data.js` 是否存在；
 2. 如果 `LAYOUT_CHECK=1`，先跑 `check_layout.mjs`，发现文字越界/重叠/压字幕就退出；
-3. 从 `audio/full.wav` 读时长，算出 `ceil(duration × fps)` 帧；
-4. 把帧区间均分给 N 个 `render_range.mjs` 进程；区间左闭右开、互不重叠；
-5. 检查帧数完整；
-6. 如果存在 `watermark.json`，对 `frames/` 嵌入隐藏水印（`WATERMARK=0` 跳过）；
-7. 用 ffmpeg 合成 H.264 + AAC，输出 `<id>.mp4`；
-8. 打印 `ffprobe` 结果。
+3. 如果 `script.json.kind === "code"`，跑 `check_code_samples.mjs`：没有代码块、代码少于 5 行/多于 14 行、没有真实输出、没有 `data-cue`，都直接退出；
+4. 从 `audio/full.wav` 读时长，算出 `ceil(duration × fps)` 帧；
+5. 把帧区间均分给 N 个 `render_range.mjs` 进程；区间左闭右开、互不重叠；
+6. 检查帧数完整；
+7. 如果存在 `watermark.json`，对 `frames/` 嵌入隐藏水印（`WATERMARK=0` 跳过）；
+8. 用 ffmpeg 合成 H.264 + AAC，输出 `<id>.mp4`；
+9. 打印 `ffprobe` 结果。
 
 环境变量：
 
@@ -116,7 +117,22 @@ LAYOUT_CHECK=1 bash <skill>/scripts/render.sh 15 4
 
 大字号本身的行框高于字形是正常现象，不会被误报。发现问题时先改文案/拆屏，不要缩到最小字号以下。
 
-## 8. 隐藏水印
+## 8. 代码样例检查
+
+```bash
+node <skill>/scripts/check_code_samples.mjs
+```
+
+只对 `script.json.kind === "code"` 生效，`render.sh` 会自动执行。检查：
+
+- 至少一个 `<pre class="code">`，5–14 个非空行；
+- 代码块声明 `data-segment`，且落在 `example` / `how` / `apply` / `demo` 段；
+- 每行用 `data-cue` 绑定旁白句；
+- 至少一个非空的 `<pre class="code-out">` 输出块。
+
+不通过直接退出，不产出成片。完整结构见 `code-scene-template.html`。
+
+## 9. 隐藏水印
 
 ```bash
 python3 <skill>/scripts/watermark.py embed-frames --frames frames --config watermark.json

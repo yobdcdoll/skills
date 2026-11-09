@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Code lesson scene template</title>
+<style>
+  :root{
+    --paper:#F7F3EA; --ink:#1F2933; --muted:#6B7280; --line:#D8D0C3;
+    --blue:#2563EB; --orange:#F97316; --green:#16A34A; --red:#DC2626;
+    --white:#FFFDF8; --code-bg:#1F2933; --code-fg:#F7F3EA; --code-dim:#9CA3AF;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:var(--paper);
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,sans-serif;color:var(--ink);}
+  #stage{position:relative;width:1920px;height:1080px;overflow:hidden;
+    background:radial-gradient(circle at 18% 8%,rgba(37,99,235,.07),transparent 38%),
+               radial-gradient(circle at 84% 92%,rgba(249,115,22,.07),transparent 40%),var(--paper);}
+  #grid{position:absolute;inset:0;pointer-events:none;
+    background-image:linear-gradient(rgba(31,41,51,.05) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(31,41,51,.05) 1px,transparent 1px);
+    background-size:48px 48px;
+    -webkit-mask-image:linear-gradient(to bottom,transparent,black 15%,black 85%,transparent);
+            mask-image:linear-gradient(to bottom,transparent,black 15%,black 85%,transparent);}
+  #header{position:absolute;top:42px;left:64px;right:64px;display:flex;justify-content:space-between;
+    font-size:20px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;}
+  #header .dot{color:var(--blue);}
+  .scene{position:absolute;inset:0;opacity:0;visibility:hidden;}
+  .scene-title{position:absolute;left:140px;top:158px;max-width:1620px;font-size:54px;font-weight:800;
+    letter-spacing:-.04em;line-height:1.15;overflow-wrap:anywhere;}
+  .scene-sub{position:absolute;left:146px;top:232px;max-width:1500px;font-size:32px;color:var(--muted);
+    line-height:1.4;overflow-wrap:anywhere;}
+
+  /* hook */
+  #hook-title{position:absolute;left:140px;top:300px;max-width:1620px;font-size:100px;font-weight:800;
+    letter-spacing:-.06em;line-height:1.02;overflow-wrap:anywhere;}
+  #hook-title span{color:var(--blue);}
+  #hook-sub{position:absolute;left:146px;top:450px;max-width:1400px;font-size:38px;color:var(--muted);
+    line-height:1.4;overflow-wrap:anywhere;}
+  #hook-chips{position:absolute;left:146px;top:600px;display:flex;flex-wrap:wrap;gap:16px;max-width:1600px;}
+  .chip{padding:14px 24px;border:1.5px solid var(--line);border-radius:999px;background:var(--white);
+    max-width:100%;font-size:26px;color:var(--muted);opacity:0;overflow-wrap:anywhere;}
+  .chip.on{border-color:var(--blue);color:var(--blue);}
+
+  /* define */
+  #def-card{position:absolute;left:140px;top:300px;width:1120px;background:var(--white);
+    border:2px solid var(--ink);border-radius:18px;padding:34px 40px;
+    box-shadow:10px 10px 0 rgba(31,41,51,.10);opacity:0;}
+  #def-card .k{font-family:"SF Mono",Menlo,monospace;font-size:18px;letter-spacing:.14em;color:var(--muted);}
+  #def-card .t{font-size:52px;font-weight:800;margin-top:12px;}
+  #def-card .d{font-size:32px;line-height:1.6;color:#39424E;margin-top:14px;overflow-wrap:anywhere;}
+  #def-formula{position:absolute;left:140px;top:700px;max-width:1620px;padding:18px 26px;background:var(--ink);
+    color:#fff;border-radius:12px;font-family:"SF Mono",Menlo,monospace;font-size:36px;
+    line-height:1.3;overflow-wrap:anywhere;opacity:0;}
+
+  /* example: code card on the left, live state + output on the right */
+  #code-card{position:absolute;left:140px;top:300px;width:1100px;background:var(--code-bg);
+    border-radius:16px;padding:20px 22px 16px;box-shadow:10px 10px 0 rgba(31,41,51,.10);opacity:0;}
+  #code-card .k{font-family:"SF Mono",Menlo,monospace;font-size:18px;letter-spacing:.14em;color:var(--code-dim);}
+  pre.code{margin:10px 0 0;font-family:"SF Mono",Menlo,monospace;font-size:30px;line-height:1.28;
+    color:var(--code-fg);white-space:pre;overflow:hidden;counter-reset:line;}
+  pre.code .cl{display:block;padding:0 10px;border-radius:6px;white-space:pre;counter-increment:line;}
+  pre.code .cl::before{content:counter(line);display:inline-block;width:44px;
+    color:#6B7280;font-size:22px;-webkit-user-select:none;user-select:none;}
+  pre.code .cl.on{background:rgba(37,99,235,.55);}
+  pre.code .cm{color:var(--code-dim);}
+  #ex-state{position:absolute;left:1280px;top:300px;width:500px;opacity:0;}
+  #ex-state .k{font-family:"SF Mono",Menlo,monospace;font-size:18px;letter-spacing:.14em;color:var(--muted);}
+  .state-row{display:flex;justify-content:space-between;align-items:baseline;gap:18px;padding:16px 8px;
+    border-bottom:1px dashed var(--line);}
+  .state-row span{font-size:28px;color:var(--muted);}
+  .state-row b{font-family:"SF Mono",Menlo,monospace;font-size:48px;color:var(--ink);}
+  .state-row.hot b{color:var(--orange);}
+  #code-out{position:absolute;left:1280px;top:700px;width:500px;margin:0;padding:22px 26px;
+    background:var(--code-bg);color:#86EFAC;border-radius:14px;
+    font-family:"SF Mono",Menlo,monospace;font-size:40px;line-height:1.3;opacity:0;white-space:pre-wrap;}
+  #code-out::before{content:"OUTPUT";display:block;margin-bottom:8px;font-size:18px;
+    letter-spacing:.14em;color:var(--code-dim);}
+
+  /* recap */
+  #recap-chips{position:absolute;left:140px;top:300px;display:flex;gap:14px;flex-wrap:wrap;width:1600px;}
+  #recap-checks{position:absolute;left:140px;top:460px;display:flex;flex-wrap:wrap;gap:20px;max-width:1600px;}
+  .check{width:500px;background:var(--white);border:1.5px solid var(--line);border-radius:16px;
+    padding:24px 26px;opacity:0;}
+  .check .k{font-family:"SF Mono",Menlo,monospace;font-size:18px;letter-spacing:.12em;color:var(--muted);}
+  .check .t{font-size:30px;font-weight:800;margin-top:10px;line-height:1.3;overflow-wrap:anywhere;}
+  #recap-next{position:absolute;left:140px;bottom:250px;max-width:1500px;font-size:32px;color:var(--muted);
+    line-height:1.4;overflow-wrap:anywhere;opacity:0;}
+
+  /* subtitle: 允许两行，绝不裁字；44px 保证手机横屏全屏时可读 */
+  #subtitle{position:absolute;left:50%;bottom:76px;transform:translateX(-50%);max-width:1600px;
+    padding:10px 24px;border-radius:10px;background:rgba(255,253,248,.92);border:1px solid rgba(31,41,51,.12);
+    font-size:44px;line-height:1.36;color:var(--ink);text-align:center;opacity:0;
+    white-space:normal;overflow-wrap:anywhere;}
+  #progress-wrap{position:absolute;left:64px;right:64px;bottom:40px;height:3px;background:rgba(31,41,51,.12);}
+  #progress{height:100%;width:0;background:var(--ink);}
+  #chapter{position:absolute;left:64px;bottom:54px;font-size:18px;letter-spacing:.12em;color:var(--muted);}
+  #timecode{position:absolute;right:64px;bottom:54px;font-family:"SF Mono",Menlo,monospace;font-size:18px;color:var(--muted);}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="grid"></div>
+  <!-- 页眉只写课程系列名或知识点名，不要写课程序号。 -->
+  <div id="header"><div><span class="dot">●</span>&nbsp; KNOWLEDGE · LESSON</div><div id="header-meta">VIDEO</div></div>
+
+  <!-- 示例：HashMap 的 put 与扩容（4 场最小演示）。
+       code-scene-template 的重点是 example 场：代码本体 + 逐行高亮 + 状态 + 真实输出。
+       script.json 必须设 "kind": "code"，render.sh 才会跑 check_code_samples.mjs。
+       段 id 必须与 script.json 一致；代码块的 data-segment 用来告诉检查脚本它属于哪一段。 -->
+  <div class="scene" id="scene-hook">
+    <div id="hook-title">12 次 <span>→</span> 第 13 次</div>
+    <div id="hook-sub">容量 16 的 HashMap，为什么偏偏在第 13 个元素时扩容？</div>
+    <div id="hook-chips">
+      <div class="chip" id="hook-c0">size</div>
+      <div class="chip" id="hook-c1">capacity</div>
+      <div class="chip" id="hook-c2">threshold</div>
+    </div>
+  </div>
+
+  <div class="scene" id="scene-define">
+    <div class="scene-title">put 到底做了什么</div>
+    <div class="scene-sub">先算下标，再放元素；装太满就扩容。</div>
+    <div id="def-card">
+      <div class="k">DEFINITION</div>
+      <div class="t">HashMap.put</div>
+      <div class="d">用 key 的 hash 定位桶；元素数超过阈值时，容量翻倍并重新分配。</div>
+    </div>
+    <div id="def-formula">index = hash(key) &amp; (capacity - 1)</div>
+  </div>
+
+  <div class="scene" id="scene-example">
+    <div class="scene-title">跑一遍：13 次 put</div>
+    <div class="scene-sub">看代码、看状态、看输出。</div>
+
+    <div id="code-card">
+      <div class="k">JAVA · PUT DEMO</div>
+      <!-- 每个 .cl 是一行；data-cue 指向 example 段的第几句旁白。
+           检查脚本要求：5–14 个非空行，含调用现场，并有真实输出块。 -->
+      <pre class="code" id="ex-code" data-segment="example" data-lang="java"><span class="cl" data-cue="0">import java.util.HashMap;</span><span class="cl" data-cue="0">import java.util.Map;</span><span class="cl"> </span><span class="cl" data-cue="0">public class PutDemo {</span><span class="cl" data-cue="0">    public static void main(String[] args) {</span><span class="cl" data-cue="0">        Map&lt;String, Integer&gt; map = new HashMap&lt;&gt;();</span><span class="cl" data-cue="1">        for (int i = 1; i &lt;= 13; i++) {</span><span class="cl" data-cue="2">            map.put("user_" + i, i);</span><span class="cl">        }</span><span class="cl" data-cue="5">        System.out.println(map.size()); <span class="cm">// 13</span></span><span class="cl">    }</span><span class="cl">}</span></pre>
+    </div>
+
+    <div id="ex-state">
+      <div class="k">LIVE STATE</div>
+      <div class="state-row" id="st-size"><span>size</span><b>0</b></div>
+      <div class="state-row" id="st-cap"><span>capacity</span><b>16</b></div>
+      <div class="state-row" id="st-thr"><span>threshold</span><b>12</b></div>
+    </div>
+
+    <pre id="code-out" class="code-out" data-for="ex-code">13</pre>
+  </div>
+
+  <div class="scene" id="scene-recap">
+    <div class="scene-title">四句话带走</div>
+    <div class="scene-sub">能复述，才算看过。</div>
+    <div id="recap-chips">
+      <div class="chip" id="rc-0">hash 定位</div>
+      <div class="chip" id="rc-1">阈值 12</div>
+      <div class="chip" id="rc-2">第 13 个扩容</div>
+      <div class="chip" id="rc-3">容量翻倍</div>
+    </div>
+    <div id="recap-checks">
+      <div class="check" id="rc-check0"><div class="k">CHECK 01</div><div class="t">不看笔记写出 put 调用</div></div>
+      <div class="check" id="rc-check1"><div class="k">CHECK 02</div><div class="t">解释 12 和 13 的差别</div></div>
+      <div class="check" id="rc-check2"><div class="k">CHECK 03</div><div class="t">改成 17 个元素，算阈值</div></div>
+    </div>
+    <div id="recap-next">下一讲：哈希冲突时链表和红黑树怎么选。</div>
+  </div>
+
+  <div id="subtitle"></div>
+  <div id="progress-wrap"><div id="progress"></div></div>
+  <div id="chapter"></div>
+  <div id="timecode"></div>
+</div>
+
+<script src="scene-data.js"></script>
+<script src="cues.js"></script>
+<script src="subtitles.js"></script>
+<script>
+// 本模板假设 hook / define / example / recap 分别至少有 3 / 2 / 6 / 3 句旁白。
+// 按你的 script.json 调整 cue 索引；缺失 cue 会在控制台告警并阻止出片。
+const TL = window.TIMELINE;
+const CU = window.CUES || {};
+const SCENES = ['hook', 'define', 'example', 'recap'];
+const $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const span = (t, a, b) => clamp((t - a) / (b - a));
+const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+const getSeg = id => TL.segments.find(s => s.id === id);
+
+function cue(id, i) {
+  const s = CU[id] && CU[id].sentences && CU[id].sentences[i];
+  if (!s) {
+    console.warn(`missing cue: ${id}[${i}]`);
+    return 0;
+  }
+  return s.start;
+}
+
+function reveal(el, t, start, dur = 0.5, dy = 20) {
+  if (!el) return;
+  const p = ease(span(t, start, start + dur));
+  el.style.opacity = p;
+  el.style.transform = `translateY(${dy * (1 - p)}px)`;
+}
+
+function setScene(id, opacity) {
+  const el = $('scene-' + id);
+  if (!el) return;
+  el.style.opacity = opacity;
+  el.style.visibility = opacity > 0.001 ? 'visible' : 'hidden';
+}
+
+function sceneOpacity(id, t, inD = 0.6, outD = 0.6) {
+  const s = getSeg(id);
+  if (!s) return 0;
+  const a = inD > 0 ? clamp((t - (s.start - inD / 2)) / inD) : 1;
+  const b = outD > 0 ? clamp(((s.end + outD / 2) - t) / outD) : 1;
+  return Math.min(a, b);
+}
+
+function renderHook(t) {
+  const s = getSeg('hook');
+  if (!s) return;
+  const lt = t - s.start;
+  const c = i => cue('hook', i);
+  $('hook-title').style.opacity = 1;
+  reveal($('hook-sub'), lt, c(0), 0.6, 16);
+  ['hook-c0', 'hook-c1', 'hook-c2'].forEach((id, i) => {
+    reveal($(id), lt, c(0), 0.5);
+    $(id).classList.toggle('on', lt >= c(i));
+  });
+}
+
+function renderDefine(t) {
+  const s = getSeg('define');
+  if (!s) return;
+  const lt = t - s.start;
+  const c = i => cue('define', i);
+  reveal($('def-card'), lt, c(0), 0.6, 24);
+  reveal($('def-formula'), lt, c(1), 0.6, 16);
+}
+
+// 逐行高亮：每行用 data-cue 声明它从第几句旁白开始亮；当前行之前的行降级。
+function renderCode(t) {
+  const s = getSeg('example');
+  if (!s) return;
+  const lt = t - s.start;
+  const c = i => cue('example', i);
+  reveal($('code-card'), lt, c(0), 0.5, 18);
+  reveal($('ex-state'), lt, c(0), 0.5, 18);
+
+  const lines = [...document.querySelectorAll('#ex-code .cl')];
+  let active = -1;
+  lines.forEach((el, i) => {
+    const idx = el.dataset.cue;
+    if (idx !== undefined && lt >= c(Number(idx))) active = i;
+  });
+  lines.forEach((el, i) => el.classList.toggle('on', i === active));
+
+  // 状态跟着旁白走：size 0 → 12 → 13；容量和阈值在第 5 句翻倍。
+  const size = lt >= c(3) ? '13' : lt >= c(2) ? '12' : '0';
+  $('st-size').querySelector('b').textContent = size;
+  const started = lt >= c(2);
+  const resized = lt >= c(4);
+  $('st-cap').querySelector('b').textContent = resized ? '32' : started ? '16' : '—';
+  $('st-thr').querySelector('b').textContent = resized ? '24' : started ? '12' : '—';
+  $('st-size').classList.toggle('hot', lt >= c(3));
+  $('st-cap').classList.toggle('hot', resized);
+  $('st-thr').classList.toggle('hot', resized);
+
+  reveal($('code-out'), lt, c(5), 0.5, 10);
+}
+
+function renderRecap(t) {
+  const s = getSeg('recap');
+  if (!s) return;
+  const lt = t - s.start;
+  const c = i => cue('recap', i);
+  [0, 1, 2, 3].forEach(i => reveal($('rc-' + i), lt, c(0) + i * 0.35, 0.4));
+  [0, 1, 2].forEach(i => reveal($('rc-check' + i), lt, c(1) + i * 0.35, 0.4, 16));
+  reveal($('recap-next'), lt, c(2), 0.5, 16);
+}
+
+function renderSubtitle(t) {
+  const el = $('subtitle');
+  if (!el) return;
+  let active = null;
+  for (const sub of (window.SUBTITLES || [])) {
+    if (t >= sub.start && t <= sub.end) { active = sub; break; }
+  }
+  if (active) {
+    el.textContent = active.text;
+    el.style.opacity = 1;
+  } else {
+    el.style.opacity = 0;
+  }
+}
+
+function renderAt(t) {
+  SCENES.forEach((id, i) => {
+    const first = i === 0;
+    const last = i === SCENES.length - 1;
+    setScene(id, sceneOpacity(id, t, first ? 0 : 0.6, last ? 0 : 0.6));
+  });
+
+  renderHook(t);
+  renderDefine(t);
+  renderCode(t);
+  renderRecap(t);
+  renderSubtitle(t);
+
+  $('progress').style.width = `${clamp(t / TL.total) * 100}%`;
+  let cur = TL.segments[0];
+  for (const s of TL.segments) if (t >= s.start) cur = s;
+  $('chapter').textContent = cur.label || cur.id;
+  const mm = String(Math.floor(t / 60)).padStart(2, '0');
+  const ss = String(Math.floor(t % 60)).padStart(2, '0');
+  $('timecode').textContent = `${mm}:${ss}`;
+}
+
+window.renderAt = renderAt;
+renderAt(0);
+
+// Live preview only. Production rendering always calls renderAt(i / fps).
+if (location.search.includes('preview')) {
+  const start = performance.now();
+  (function loop(now) {
+    const t = ((now - start) / 1000) % TL.total;
+    renderAt(t);
+    requestAnimationFrame(loop);
+  })(performance.now());
+}
+</script>
+</body>
+</html>

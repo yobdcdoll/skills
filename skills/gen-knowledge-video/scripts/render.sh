@@ -12,6 +12,9 @@
 #   LAYOUT_CHECK=1   run check_layout.mjs before rendering (fails on overflow)
 #   WATERMARK=0      skip watermark.json embedding even when the file exists
 #
+# Code lessons (script.json kind="code") are also gated by
+# check_code_samples.mjs: no visible code block + real output means no render.
+#
 # Requires: node, python3, ffmpeg, ffprobe, Playwright (or BROWSER_PATH).
 # watermark.json additionally requires numpy + pillow.
 
@@ -54,6 +57,11 @@ if [ "${LAYOUT_CHECK:-0}" = "1" ]; then
   echo "checking text layout against longest real copy ..."
   node "$SCRIPT_DIR/check_layout.mjs" || exit 1
 fi
+
+# Code lessons must actually show code + output. The checker exits 0 for
+# non-code lessons, and warns when code blocks exist but kind is not "code".
+echo "checking code lesson contract ..."
+node "$SCRIPT_DIR/check_code_samples.mjs" || exit 1
 
 if [ -f watermark.json ] && [ "${WATERMARK:-1}" != "0" ]; then
   python3 -c "import numpy, PIL" 2>/dev/null || {
