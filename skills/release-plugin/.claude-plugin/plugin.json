@@ -1,0 +1,22 @@
+{
+  "name": "release-plugin",
+  "version": "1.0.0",
+  "description": "Commit, push, and update the installed Claude Code plugin so the latest skills take effect.",
+  "author": {
+    "name": "yobdcdoll",
+    "url": "https://github.com/yobdcdoll"
+  },
+  "homepage": "https://github.com/yobdcdoll/skills",
+  "repository": "https://github.com/yobdcdoll/skills",
+  "keywords": [
+    "plugin",
+    "release",
+    "publish",
+    "commit",
+    "push",
+    "claude-code"
+  ],
+  "skills": [
+    "./"
+  ]
+}

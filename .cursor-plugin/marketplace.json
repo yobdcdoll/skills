@@ -4,15 +4,15 @@
     "name": "yobdcdoll"
   },
   "metadata": {
-    "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, knowledge-point explainer videos, and Bilibili publishing.",
-    "version": "2.2.4"
+    "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, knowledge-point explainer videos, Bilibili publishing, and plugin releases.",
+    "version": "2.2.5"
   },
   "plugins": [
     {
       "name": "yobdcdoll-skills",
       "source": "./",
-      "description": "All four skills bundled: exam restoration, GitHub IP diagnostics, knowledge-point explainer videos, and Bilibili publishing.",
-      "version": "2.2.4",
+      "description": "All five skills bundled: exam restoration, GitHub IP diagnostics, knowledge-point explainer videos, Bilibili publishing, and one-command plugin releases.",
+      "version": "2.2.5",
       "author": {
         "name": "yobdcdoll"
       },
@@ -107,6 +107,24 @@
         "video",
         "publishing",
         "cli"
+      ]
+    },
+    {
+      "name": "release-plugin",
+      "source": "./skills/release-plugin",
+      "description": "Commit, push, and update the installed Claude Code plugin so the latest skills take effect.",
+      "version": "1.0.0",
+      "author": {
+        "name": "yobdcdoll"
+      },
+      "repository": "https://github.com/yobdcdoll/skills",
+      "keywords": [
+        "plugin",
+        "release",
+        "publish",
+        "commit",
+        "push",
+        "claude-code"
       ]
     }
   ]

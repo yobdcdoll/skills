@@ -1,7 +1,7 @@
 {
   "name": "yobdcdoll-skills",
-  "version": "2.2.4",
-  "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, knowledge-point explainer videos, and Bilibili publishing.",
+  "version": "2.2.5",
+  "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, knowledge-point explainer videos, Bilibili publishing, and plugin releases.",
   "author": {
     "name": "yobdcdoll"
   },
@@ -24,12 +24,16 @@
     "biliup",
     "upload",
     "publishing",
-    "cli"
+    "cli",
+    "plugin",
+    "release",
+    "publish"
   ],
   "skills": [
     "./skills/exam-clean",
     "./skills/gen-knowledge-video",
     "./skills/update-github-hosts",
-    "./skills/biliup"
+    "./skills/biliup",
+    "./skills/release-plugin"
   ]
 }
