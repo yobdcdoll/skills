@@ -1,6 +1,6 @@
 {
   "name": "yobdcdoll-skills",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, knowledge-point explainer videos, and Bilibili publishing.",
   "author": {
     "name": "yobdcdoll"

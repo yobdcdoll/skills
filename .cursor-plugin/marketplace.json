@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, knowledge-point explainer videos, and Bilibili publishing.",
-    "version": "2.2.2"
+    "version": "2.2.3"
   },
   "plugins": [
     {
       "name": "yobdcdoll-skills",
       "source": "./",
       "description": "All four skills bundled: exam restoration, GitHub IP diagnostics, knowledge-point explainer videos, and Bilibili publishing.",
-      "version": "2.2.2",
+      "version": "2.2.3",
       "author": {
         "name": "yobdcdoll"
       },
