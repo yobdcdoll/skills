@@ -24,6 +24,12 @@ Speed:
     duration ratio, not by the nominal value, so subtitles and visuals stay
     locked to the audio. Lead/gap/tail are breathing room and are not scaled.
     Set `"speed": 1.0` to keep the raw TTS pace.
+
+Pronunciation:
+    In segment text, 〖display|spoken〗 fixes a reading without changing what
+    viewers read. Example: `第 3 〖行|航〗` displays 行 but sends 航 (háng) to TTS;
+    `〖JSON|杰森〗` displays JSON but speaks "杰森". Every occurrence must be
+    annotated. Cue/timeline text always uses the display side.
 """
 
 from __future__ import annotations
@@ -52,6 +58,7 @@ AUDIO.mkdir(exist_ok=True)
 
 DATA = json.loads(SCRIPT.read_text(encoding="utf-8"))
 LANG = DATA.get("lang", "zh-CN")
+KIND = DATA.get("kind", "concept")
 
 try:
     VOICE, RATE, PITCH = resolve_voice(DATA, LANG)
@@ -68,6 +75,84 @@ SEGMENTS = DATA.get("segments") or []
 if not SEGMENTS:
     sys.exit("script.json has no segments")
 
+# 〖display|spoken〗 fixes a pronunciation without changing subtitles or visuals.
+# Display text is what viewers read; spoken text is the only thing sent to TTS.
+ANNOTATION = re.compile(r"〖([^〖〗|]+)\|([^〖〗|]+)〗")
+
+
+def split_sentences(text: str) -> list[str]:
+    """Split like Edge TTS SentenceBoundary: 。！？!? and newlines, not ，、；：…."""
+    parts = re.findall(r"[^。！？!?\r\n]+[。！？!?]*", text)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def sentence_marks(text: str) -> list[str]:
+    return re.findall(r"[。！？!?\r\n]", text)
+
+
+def prepare_narration(raw: str, seg_id: str) -> tuple[str, str, list[str]]:
+    display = ANNOTATION.sub(lambda m: m.group(1), raw)
+    spoken = ANNOTATION.sub(lambda m: m.group(2), raw)
+    for label, value in (("display", display), ("spoken", spoken)):
+        if "〖" in value or "〗" in value:
+            sys.exit(
+                f"segment {seg_id}: malformed pronunciation annotation in {label} text; "
+                "use 〖display|spoken〗 with non-empty sides"
+            )
+    if sentence_marks(display) != sentence_marks(spoken):
+        sys.exit(
+            f"segment {seg_id}: pronunciation annotation changed sentence punctuation; "
+            "keep 。！？!? and newlines outside 〖display|spoken〗"
+        )
+    return display, spoken, split_sentences(display)
+
+
+# Common in tech narration; TTS still guesses wrong often enough to gate.
+ZH_PRONUNCIATION_RISKS = [
+    (
+        re.compile(
+            r"第\s*[0-9一二三四五六七八九十百千]+\s*行|[0-9]+\s*行|"
+            r"行号|行数|行首|行尾|行内|行间|行列|银行|行业|"
+            r"当前行|所在行|目标行|首行|末行|整行|逐行|换行|空行|"
+            r"每一行|上一行|下一行|这一行|每行|单行|多行|一行|两行"
+        ),
+        "行 = row 时读 háng",
+    ),
+    (
+        re.compile(
+            r"重新|重复|重启|重试|重排|重载|重传|重入|重写|重定向|"
+            r"重置|重建|重组|重叠|重放|重连|重发|重算|重命名|重编码|"
+            r"重采样|重计算|重来|重开|重登|重做"
+        ),
+        "重 = again 时读 chóng",
+    ),
+    (
+        re.compile(r"(?<![A-Za-z])[Jj][Ss][Oo][Nn](?![A-Za-z])"),
+        "JSON 读「杰森」，不要逐字母念",
+    ),
+]
+
+
+def check_pronunciation(raw: str, seg_id: str) -> None:
+    # Language lessons discuss readings explicitly; the generic gate would be noise.
+    if not LANG.startswith("zh") or KIND == "language":
+        return
+    scan = ANNOTATION.sub("", raw)
+    hits: list[tuple[str, str]] = []
+    for pattern, hint in ZH_PRONUNCIATION_RISKS:
+        for match in pattern.finditer(scan):
+            item = (match.group(0), hint)
+            if item not in hits:
+                hits.append(item)
+    if hits:
+        detail = "；".join(f"{token}（{hint}）" for token, hint in hits)
+        sys.exit(
+            f"segment {seg_id}: unannotated pronunciation risk: {detail}. "
+            "Annotate every occurrence as 〖display|spoken〗, e.g. "
+            "第 3 〖行|航〗、〖重新|虫新〗、〖JSON|杰森〗；见 SKILL.md 2.3"
+        )
+
+
 _seen_ids: set[str] = set()
 for _seg in SEGMENTS:
     _sid = str(_seg.get("id", ""))
@@ -78,6 +163,13 @@ for _seg in SEGMENTS:
     _seen_ids.add(_sid)
     if not str(_seg.get("text", "")).strip():
         sys.exit(f"empty text for segment: {_sid}")
+    _display, _spoken, _display_sentences = prepare_narration(
+        str(_seg.get("text", "")), _sid
+    )
+    check_pronunciation(str(_seg.get("text", "")), _sid)
+    _seg["_display"] = _display
+    _seg["_spoken"] = _spoken
+    _seg["_display_sentences"] = _display_sentences
 
 
 def run(cmd: list[str]) -> None:
@@ -145,7 +237,7 @@ def fallback_sentences(text: str, duration: float) -> list[dict]:
 
 async def synth_once(seg: dict) -> tuple[Path, list[dict], list[dict]]:
     mp3 = AUDIO / f"{seg['id']}.mp3"
-    communicate = edge_tts.Communicate(seg["text"], VOICE, rate=RATE, pitch=PITCH)
+    communicate = edge_tts.Communicate(seg["_spoken"], VOICE, rate=RATE, pitch=PITCH)
     sentences: list[dict] = []
     words: list[dict] = []
     with mp3.open("wb") as fh:
@@ -229,7 +321,18 @@ async def main() -> None:
                 f"  WARNING: no SentenceBoundary for {seg['id']}; using punctuation fallback",
                 file=sys.stderr,
             )
-            sentences = fallback_sentences(seg["text"], duration)
+            sentences = fallback_sentences(seg["_display"], duration)
+        elif seg["_spoken"] != seg["_display"]:
+            # Cue text drives subtitles. Restore the written form so viewers see
+            # JSON/行/重新, not the homophones used only to steer the TTS voice.
+            if len(sentences) != len(seg["_display_sentences"]):
+                sys.exit(
+                    f"segment {seg['id']}: TTS returned {len(sentences)} sentence "
+                    f"boundaries for {len(seg['_display_sentences'])} written sentences; "
+                    "shorten the segment or keep sentence punctuation identical"
+                )
+            for ev, written in zip(sentences, seg["_display_sentences"]):
+                ev["text"] = written
 
         cues[seg["id"]] = {"words": words, "sentences": sentences}
 
@@ -237,7 +340,7 @@ async def main() -> None:
             {
                 "id": seg["id"],
                 "label": seg.get("label", seg["id"]),
-                "text": seg["text"],
+                "text": seg["_display"],
                 "audio": f"audio/{seg['id']}.wav",
                 "start": round(cursor, 3),
                 "duration": round(duration, 3),

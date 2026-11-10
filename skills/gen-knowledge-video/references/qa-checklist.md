@@ -33,6 +33,14 @@ python3 <skill>/scripts/watermark.py extract --video /tmp/<id>-re30.mp4 --config
 - [ ] `watermark.json` 没有提交进仓库（含密钥）。
 - [ ] `frames/.watermark.json` 显示 `complete: true`，没有重复嵌入。
 
+### 1.2 读音与术语
+
+- [ ] 多音字按词义读对：`行`（第几行、行号、行数）读 háng，`重`（重新、重复、重启、重试）读 chóng，`调用` 读 diào，`处理` 读 chǔ。
+- [ ] `script.json` 里所有易错词都用 `〖显示|朗读〗` 标了读音，且**每个出现都标了**，不是只标第一次。
+- [ ] `JSON` 念「杰森」而不是 J-S-O-N；`GIF`、`SQL`、`Nginx` 等术语全讲只有一种读法。
+- [ ] 含读音标注的段落已完整试听；字幕和画面仍显示原词（`JSON`、`行`、`重新`），没有露出 `杰森`、`航`、`虫新` 这类朗读形。
+- [ ] 含读音标注的段落，`cues.json` 的句数等于显示文本句数；标注没有把句号、问号、感叹号或换行包进去。
+
 ## 2. 帧完整性
 
 ```bash
