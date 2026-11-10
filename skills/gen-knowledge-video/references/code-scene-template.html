@@ -7,7 +7,10 @@
   :root{
     --paper:#F7F3EA; --ink:#1F2933; --muted:#6B7280; --line:#D8D0C3;
     --blue:#2563EB; --orange:#F97316; --green:#16A34A; --red:#DC2626;
-    --white:#FFFDF8; --code-bg:#1F2933; --code-fg:#F7F3EA; --code-dim:#9CA3AF;
+    --white:#FFFDF8; --code-bg:#1E222A; --code-fg:#D7DAE0; --code-dim:#7F8B99;
+    --code-kw:#C792EA; --code-type:#FFCB6B; --code-fn:#82AAFF;
+    --code-str:#C3E88D; --code-num:#F78C6C; --code-cmt:#697098;
+    --code-op:#89DDFF; --code-ann:#FFCB6B; --code-line:rgba(130,170,255,.14);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:var(--paper);
@@ -53,16 +56,28 @@
     line-height:1.3;overflow-wrap:anywhere;opacity:0;}
 
   /* example: code card on the left, live state + output on the right */
-  #code-card{position:absolute;left:140px;top:300px;width:1100px;background:var(--code-bg);
-    border-radius:16px;padding:20px 22px 16px;box-shadow:10px 10px 0 rgba(31,41,51,.10);opacity:0;}
+  #code-card{position:absolute;left:140px;top:290px;width:1100px;background:var(--code-bg);
+    border-radius:16px;padding:16px 22px 14px;box-shadow:10px 10px 0 rgba(31,41,51,.10);opacity:0;}
+  /* 没有右侧状态栏时用宽版代码卡，减少长行折行。 */
+  #code-card.wide{width:1640px;}
   #code-card .k{font-family:"SF Mono",Menlo,monospace;font-size:18px;letter-spacing:.14em;color:var(--code-dim);}
-  pre.code{margin:10px 0 0;font-family:"SF Mono",Menlo,monospace;font-size:30px;line-height:1.28;
-    color:var(--code-fg);white-space:pre;overflow:hidden;counter-reset:line;}
-  pre.code .cl{display:block;padding:0 10px;border-radius:6px;white-space:pre;counter-increment:line;}
-  pre.code .cl::before{content:counter(line);display:inline-block;width:44px;
-    color:#6B7280;font-size:22px;-webkit-user-select:none;user-select:none;}
-  pre.code .cl.on{background:rgba(37,99,235,.55);}
-  pre.code .cm{color:var(--code-dim);}
+  pre.code{margin:6px 0 0;font-family:"SF Mono",Menlo,monospace;font-size:30px;line-height:1.45;
+    color:var(--code-fg);white-space:normal;counter-reset:line;}
+  pre.code .cl{display:flex;align-items:flex-start;gap:10px;padding:1px 10px;border-radius:6px;
+    counter-increment:line;transition:background .15s ease,opacity .15s ease;}
+  pre.code .cl::before{content:counter(line);flex:0 0 44px;text-align:right;color:#4B5563;
+    font-size:22px;-webkit-user-select:none;user-select:none;}
+  pre.code .code-text{flex:1 1 auto;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;}
+  pre.code .cl.on{background:var(--code-line);box-shadow:inset 3px 0 0 var(--code-fn);}
+  pre.code .cl.done{opacity:.72;}
+  pre.code .kw{color:var(--code-kw);}
+  pre.code .ty{color:var(--code-type);}
+  pre.code .fn{color:var(--code-fn);}
+  pre.code .str{color:var(--code-str);}
+  pre.code .num{color:var(--code-num);}
+  pre.code .cm{color:var(--code-cmt);font-style:italic;}
+  pre.code .op{color:var(--code-op);}
+  pre.code .ann{color:var(--code-ann);}
   #ex-state{position:absolute;left:1280px;top:300px;width:500px;opacity:0;}
   #ex-state .k{font-family:"SF Mono",Menlo,monospace;font-size:18px;letter-spacing:.14em;color:var(--muted);}
   .state-row{display:flex;justify-content:space-between;align-items:baseline;gap:18px;padding:16px 8px;
@@ -135,8 +150,10 @@
     <div id="code-card">
       <div class="k">JAVA · PUT DEMO</div>
       <!-- 每个 .cl 是一行；data-cue 指向 example 段的第几句旁白。
-           检查脚本要求：5–14 个非空行，含调用现场，并有真实输出块。 -->
-      <pre class="code" id="ex-code" data-segment="example" data-lang="java"><span class="cl" data-cue="0">import java.util.HashMap;</span><span class="cl" data-cue="0">import java.util.Map;</span><span class="cl"> </span><span class="cl" data-cue="0">public class PutDemo {</span><span class="cl" data-cue="0">    public static void main(String[] args) {</span><span class="cl" data-cue="0">        Map&lt;String, Integer&gt; map = new HashMap&lt;&gt;();</span><span class="cl" data-cue="1">        for (int i = 1; i &lt;= 13; i++) {</span><span class="cl" data-cue="2">            map.put("user_" + i, i);</span><span class="cl">        }</span><span class="cl" data-cue="5">        System.out.println(map.size()); <span class="cm">// 13</span></span><span class="cl">    }</span><span class="cl">}</span></pre>
+           检查脚本要求：5–14 个非空行，含调用现场，并有真实输出块。
+           没有右侧状态栏时给 #code-card 加 class="wide"；一行保持纯文本，
+           pre.code 的 data-lang 会自动上色（One Dark 系）。 -->
+      <pre class="code" id="ex-code" data-segment="example" data-lang="java"><span class="cl" data-cue="0">import java.util.HashMap;</span><span class="cl" data-cue="0">import java.util.Map;</span><span class="cl"> </span><span class="cl" data-cue="0">public class PutDemo {</span><span class="cl" data-cue="0">    public static void main(String[] args) {</span><span class="cl" data-cue="0">        Map&lt;String, Integer&gt; map = new HashMap&lt;&gt;();</span><span class="cl" data-cue="1">        for (int i = 1; i &lt;= 13; i++) {</span><span class="cl" data-cue="2">            map.put("user_" + i, i);</span><span class="cl">        }</span><span class="cl" data-cue="5">        System.out.println(map.size()); // 13</span><span class="cl">    }</span><span class="cl">}</span></pre>
     </div>
 
     <div id="ex-state">
@@ -255,7 +272,10 @@ function renderCode(t) {
     const idx = el.dataset.cue;
     if (idx !== undefined && lt >= c(Number(idx))) active = i;
   });
-  lines.forEach((el, i) => el.classList.toggle('on', i === active));
+  lines.forEach((el, i) => {
+    el.classList.toggle('on', i === active);
+    el.classList.toggle('done', active > -1 && i < active);
+  });
 
   // 状态跟着旁白走：size 0 → 12 → 13；容量和阈值在第 5 句翻倍。
   const size = lt >= c(3) ? '13' : lt >= c(2) ? '12' : '0';
@@ -317,6 +337,66 @@ function renderAt(t) {
   const ss = String(Math.floor(t % 60)).padStart(2, '0');
   $('timecode').textContent = `${mm}:${ss}`;
 }
+
+// ---- 编辑器风格语法高亮：不依赖外部库，按 data-lang 上色 ----
+// 一行保持纯文本即可；需要手写 token span 的行（有子元素）会原样保留。
+const HL_KEYWORDS = new Set((
+  'abstract assert async await break case catch class const continue def default do elif else enum except extends final finally for from func function go if implements import in instanceof interface lambda let new None True False not null or pass private protected public raise record return sealed select static strictfp struct super switch synchronized this throw throws transient try type var volatile while with yield ' +
+  'SELECT FROM WHERE INSERT INTO UPDATE DELETE CREATE TABLE JOIN LEFT RIGHT INNER OUTER ON GROUP BY ORDER HAVING LIMIT AS AND OR NOT NULL PRIMARY KEY VALUES SET'
+).split(/\s+/));
+const HL_TYPES = new Set((
+  'int long short byte char boolean float double void String Object List Map Set Thread Semaphore AtomicInteger ArrayList HashMap Exception InterruptedException Runnable Integer Boolean Character'
+).split(/\s+/));
+const HL_HASH = new Set(['python', 'py', 'bash', 'sh', 'shell', 'ruby', 'yaml', 'toml', 'perl', 'r']);
+const escapeHTML = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function tokenizeCode(line, lang) {
+  const hash = HL_HASH.has(lang);
+  const sql = lang === 'sql';
+  const pattern = [
+    hash ? '#[^\\n]*' : null,
+    sql ? '--[^\\n]*' : null,
+    '\\/\\*[\\s\\S]*?\\*\\/',
+    '\\/\\/[^\\n]*',
+    '"""[\\s\\S]*?"""|\'\'\'[\\s\\S]*?\'\'\'',
+    '"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|`(?:\\\\.|[^`\\\\])*`',
+    '@[A-Za-z_]\\w*',
+    '\\b\\d[\\w.]*\\b',
+    '[A-Za-z_$][\\w$]*',
+    '[{}()\\[\\];,.:]+|[+\\-*/%=<>!&|^~?]+'
+  ].filter(Boolean).join('|');
+  const re = new RegExp(pattern, 'g');
+  let out = '', last = 0, m;
+  while ((m = re.exec(line))) {
+    out += escapeHTML(line.slice(last, m.index));
+    const tok = m[0];
+    let cls = '';
+    if (/^(?:\/\/|#|--|\/\*)/.test(tok)) cls = 'cm';
+    else if (/^(?:"|'|`)/.test(tok)) cls = 'str';
+    else if (tok[0] === '@') cls = 'ann';
+    else if (/^\d/.test(tok)) cls = 'num';
+    else if (/^[A-Za-z_$]/.test(tok)) {
+      if (HL_KEYWORDS.has(tok)) cls = 'kw';
+      else if (HL_TYPES.has(tok) || /^[A-Z]/.test(tok)) cls = 'ty';
+      else if (/^\s*\(/.test(line.slice(re.lastIndex))) cls = 'fn';
+    } else cls = 'op';
+    out += cls ? `<span class="${cls}">${escapeHTML(tok)}</span>` : escapeHTML(tok);
+    last = re.lastIndex;
+  }
+  return out + escapeHTML(line.slice(last));
+}
+
+function highlightCode() {
+  document.querySelectorAll('pre.code[data-lang]').forEach(pre => {
+    const lang = (pre.dataset.lang || '').toLowerCase();
+    pre.querySelectorAll('.cl').forEach(el => {
+      if (el.querySelector(':scope > .code-text')) return;
+      const inner = el.children.length ? el.innerHTML : tokenizeCode(el.textContent, lang);
+      el.innerHTML = `<span class="code-text">${inner}</span>`;
+    });
+  });
+}
+highlightCode();
 
 window.renderAt = renderAt;
 renderAt(0);

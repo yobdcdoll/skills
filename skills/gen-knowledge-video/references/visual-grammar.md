@@ -190,17 +190,27 @@ function renderFormula(t) {
 </div>
 <pre class="code-out" id="ex-out" data-for="ex-code">13</pre>
 <style>
-.code-card{width:1100px;padding:20px 22px;background:var(--ink);border-radius:16px;}
-.code-card .k{font:600 18px/1.2 var(--mono);letter-spacing:.14em;color:#9CA3AF;}
-pre.code{margin:10px 0 0;font:400 30px/1.28 var(--mono);color:var(--paper);white-space:pre;}
-pre.code .cl{display:block;padding:0 10px;border-radius:6px;}
-pre.code .cl.on{background:rgba(37,99,235,.55);}
-.code-out{padding:22px 26px;background:var(--ink);color:#86EFAC;
+.code-card{width:1100px;padding:16px 22px 14px;background:#1E222A;border-radius:16px;}
+.code-card.wide{width:1640px;}
+.code-card .k{font:600 18px/1.2 var(--mono);letter-spacing:.14em;color:#7F8B99;}
+pre.code{margin:6px 0 0;font:400 30px/1.45 var(--mono);color:#D7DAE0;white-space:normal;}
+pre.code .cl{display:flex;align-items:flex-start;gap:10px;padding:1px 10px;border-radius:6px;}
+pre.code .cl::before{content:counter(line);flex:0 0 44px;text-align:right;
+  color:#4B5563;font-size:22px;}
+pre.code .code-text{flex:1 1 auto;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;}
+pre.code .cl.on{background:rgba(130,170,255,.14);box-shadow:inset 3px 0 0 #82AAFF;}
+pre.code .cl.done{opacity:.72;}
+pre.code .kw{color:#C792EA;} pre.code .ty{color:#FFCB6B;} pre.code .fn{color:#82AAFF;}
+pre.code .str{color:#C3E88D;} pre.code .num{color:#F78C6C;}
+pre.code .cm{color:#697098;font-style:italic;} pre.code .op{color:#89DDFF;}
+.code-out{padding:22px 26px;background:#1E222A;color:#86EFAC;
   font:400 40px/1.3 var(--mono);border-radius:14px;}
 </style>
 ```
 
-- 一行一个 `.cl`；`data-cue` 是该行开始高亮的旁白句号，当前行高亮、已执行行降级。
+- 一行一个 `.cl`；`data-cue` 是该行开始高亮的旁白句号，当前行高亮、已执行行降到 72% 不透明度。
+- 代码用 One Dark 系编辑器配色：关键字紫、类型黄、函数蓝、字符串绿、数字橙、注释灰斜体。`pre.code[data-lang]` 会自动上色；行保持纯文本即可。
+- 行高 1.45–1.6，长行自动换行，不横向裁切；没有右侧状态栏时用 `.code-card.wide`，减少折行。
 - 每场至少一个 5–14 个非空行的主块；必须有 import/类/方法/调用现场中的必要上下文，不能只放一行表达式；3–4 行配套块也必须是完整单元；用到的标识符都要有声明，线程/异步要看到创建和启动；整段完整可见，不能用 `...` 或“省略”注释跳过行。
 - 输出块必须真实、非空，并用 `data-for` 绑定到对应代码块；输出必须由这段代码原样运行得到，可以来自运行结果、终端截图或测试输出；优先确定性，顺序不固定时标“一次可能的运行”。
 - 代码类设 `script.json.kind = "code"`，否则 `check_code_samples.mjs` 不会拦截。
