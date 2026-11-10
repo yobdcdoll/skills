@@ -4,13 +4,24 @@
 // Usage (from the lesson directory):
 //   node <skill>/scripts/check_code_samples.mjs [lesson-dir]
 //
-// It reads script.json + scene.html and fails when:
+// It reads script.json + scene.html + code-plan.md and fails when:
+//   - there is no code-plan.md, or a required section is missing;
 //   - there is no <pre class="code"> block;
-//   - a block has fewer than 5 or more than 14 non-empty lines;
+//   - a block has more than 14 non-empty lines or fewer than 3;
+//   - no block has 5–14 non-empty lines (the main block);
 //   - a block does not declare data-segment (so it is not tied to narration);
 //   - no line declares data-cue (so highlighting cannot follow the narration);
+//   - a code block uses an ellipsis/omitted-lines placeholder (the whole sample
+//     must be visible, not a fragment);
 //   - no code block sits in an example/how/apply/demo/practice segment;
-//   - there is no non-empty <pre class="code-out"> output block.
+//   - there is no non-empty <pre class="code-out"> output block;
+//   - an output block is not bound to a code block via data-for.
+//
+// Semantic completeness (every identifier declared, entry point visible,
+// thread/async creation shown), determinism, and exact output/code
+// correspondence cannot be checked statically. The gate only enforces structure
+// and binding; the QA pass must confirm the sample stands on its own and rerun
+// it to compare output.
 //
 // The goal is not to prove the code compiles. It is to stop the "talk only,
 // no sample" failure mode: no visible code + real output means no delivery.
@@ -102,6 +113,28 @@ if (!isCode) {
 }
 
 const errors = [];
+
+// code-plan.md is the paper trail for semantic completeness: which identifiers
+// are declared, where the entry point is, how threads/async are created. The
+// gate checks that the sections exist; QA checks their content.
+const planPath = path.join(dir, 'code-plan.md');
+if (!fs.existsSync(planPath)) {
+  errors.push('missing code-plan.md; a code lesson must plan declarations/types, entry, thread/async, output, and a variant before narration.');
+} else {
+  const plan = fs.readFileSync(planPath, 'utf8');
+  const requiredSections = [
+    ['声明与类型', /^#{1,6}\s*.*(?:声明|类型|declaration|type)/im],
+    ['入口', /^#{1,6}\s*.*(?:入口|entry|\bmain\b)/im],
+    ['线程与异步', /^#{1,6}\s*.*(?:线程|异步|回调|thread|async|callback)/im],
+    ['输出', /^#{1,6}\s*.*(?:输出|output)/im],
+    ['变式与边界', /^#{1,6}\s*.*(?:变式|边界|variant|boundary)/im],
+  ];
+  const missing = requiredSections.filter(([, re]) => !re.test(plan)).map(([name]) => name);
+  if (missing.length) {
+    errors.push(`code-plan.md is missing section(s): ${missing.join(', ')}. Use ## headings: 声明与类型 / 入口 / 线程与异步 / 输出 / 变式与边界.`);
+  }
+}
+
 const segmentRole = new Map();
 for (const seg of (script.segments || [])) segmentRole.set(seg.id, seg.role || seg.id);
 const exampleLike = new Set(['example', 'how', 'apply', 'demo', 'practice']);
@@ -110,14 +143,25 @@ if (codeBlocks.length === 0) {
   errors.push('no <pre class="code"> block. A code lesson must show the snippet itself, not just describe it.');
 }
 
+// A fragment hidden behind "..." / // 省略 is still a fragment. Spread
+// operators (`...args`) are fine because the line is not only an ellipsis.
+const placeholderRe = /^(?:\.\.\.|…)$|^(?:\/\/|#|\/\*|\*).*(?:\.{3}|…|省略|其余略|下略)/;
+
 let exampleBlock = false;
+let mainBlock = false;
 for (const block of codeBlocks) {
   const lines = linesOf(block.inner);
-  if (lines.length < 5) {
-    errors.push(`code block "${block.id}" has ${lines.length} non-empty line(s); need 5–14 with full context (import/class/method/call site).`);
+  for (const line of lines) {
+    if (placeholderRe.test(line)) {
+      errors.push(`code block "${block.id}" has an omitted-lines placeholder (${JSON.stringify(line)}); show the complete sample instead of a fragment.`);
+    }
   }
-  if (lines.length > 14) {
+  if (lines.length < 3) {
+    errors.push(`code block "${block.id}" has ${lines.length} non-empty line(s); even a companion block needs at least 3 lines and must be a complete unit.`);
+  } else if (lines.length > 14) {
     errors.push(`code block "${block.id}" has ${lines.length} non-empty lines; split it into 2 scenes (max 14 per screen).`);
+  } else if (lines.length >= 5) {
+    mainBlock = true;
   }
 
   const segment = block.attrs['data-segment'];
@@ -137,6 +181,10 @@ for (const block of codeBlocks) {
   }
 }
 
+if (codeBlocks.length > 0 && !mainBlock) {
+  errors.push('no block has 5–14 non-empty lines; each scene needs one main block with full context (companion blocks may be 3–4 lines).');
+}
+
 if (codeBlocks.length > 0 && !exampleBlock) {
   errors.push('no code block sits in an example/how/apply/demo segment; the sample must be part of the teaching, not an appendix.');
 }
@@ -148,7 +196,9 @@ if (outputs.length === 0) {
 
 for (const out of outputs) {
   const target = out.attrs['data-for'];
-  if (target && !codeBlocks.some(b => b.attrs.id === target)) {
+  if (!target) {
+    errors.push(`output block "${out.id}" is missing data-for; bind it to the id of the code block it prints so the two cannot drift apart.`);
+  } else if (!codeBlocks.some(b => b.attrs.id === target)) {
     errors.push(`output block "${out.id}" has data-for="${target}", but no code block has that id.`);
   }
 }

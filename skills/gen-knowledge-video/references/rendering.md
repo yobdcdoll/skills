@@ -41,7 +41,7 @@ bash <skill>/scripts/render.sh 15 4           # 分片渲染 + ffmpeg
 
 1. 检查 `script.json`、`scene.html`、`audio/full.wav`、`cues.js`、`subtitles.js`、`scene-data.js` 是否存在；
 2. 如果 `LAYOUT_CHECK=1`，先跑 `check_layout.mjs`，发现文字越界/重叠/压字幕就退出；
-3. 如果 `script.json.kind === "code"`，跑 `check_code_samples.mjs`：没有代码块、代码少于 5 行/多于 14 行、没有真实输出、没有 `data-cue`，都直接退出；
+3. 如果 `script.json.kind === "code"`，跑 `check_code_samples.mjs`：没有 `code-plan.md` 或其五个小节不全、没有 5–14 行主块、代码多于 14 行、代码里有 `...`/`// 省略` 等占位行、没有真实输出、输出块没有 `data-for`、没有 `data-cue`，都直接退出；
 4. 从 `audio/full.wav` 读时长，算出 `ceil(duration × fps)` 帧；
 5. 把帧区间均分给 N 个 `render_range.mjs` 进程；区间左闭右开、互不重叠；
 6. 检查帧数完整；
@@ -125,10 +125,12 @@ node <skill>/scripts/check_code_samples.mjs
 
 只对 `script.json.kind === "code"` 生效，`render.sh` 会自动执行。检查：
 
-- 至少一个 `<pre class="code">`，5–14 个非空行；
+- `code-plan.md` 存在，且含 `声明与类型` / `入口` / `线程与异步` / `输出` / `变式与边界` 五个小节；
+- 每个场景至少一个 5–14 个非空行的主块；3–4 行配套块必须是完整单元（语义完整性由 QA 人工确认）；
+- 整段完整可见，没有占位省略行；用到的变量、类型、函数都有声明，入口/调用现场和线程创建都在画面内；
 - 代码块声明 `data-segment`，且落在 `example` / `how` / `apply` / `demo` 段；
 - 每行用 `data-cue` 绑定旁白句；
-- 至少一个非空的 `<pre class="code-out">` 输出块。
+- 至少一个非空的 `<pre class="code-out">` 输出块，并用 `data-for` 绑定到对应代码块。
 
 不通过直接退出，不产出成片。完整结构见 `code-scene-template.html`。
 
