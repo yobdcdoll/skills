@@ -1,140 +1,45 @@
 #!/usr/bin/env python3
 """
-GitHub AI Trending 日报 - requests+html.parser 抓取 -> LLM 过滤（一次调用） -> 飞书卡片
+GitHub AI Trending 日报。
+
+抓取 GitHub Trending -> 可选 LLM 过滤 AI 项目 -> 输出 Markdown 或 JSON。
+
+脚本只负责取数和过滤，不包含任何发送逻辑，也不读取 OpenClaw 配置；
+发到哪个渠道、发给谁，由调用方（OpenClaw 或其他 agent）决定。
+
+用法:
+    python3 github_ai_trending_daily.py
+    python3 github_ai_trending_daily.py --format json
+    python3 github_ai_trending_daily.py --output /tmp/trending.md
+    LLM_API_KEY=... LLM_BASE_URL=... LLM_MODEL=... \
+        python3 github_ai_trending_daily.py
+
+环境变量:
+    LLM_API_KEY   OpenAI 兼容接口的 API key；三项齐全时才启用 AI 过滤
+    LLM_BASE_URL  接口地址，例如 https://api.openai.com/v1
+    LLM_MODEL     模型名，例如 gpt-4o-mini
+    OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL  作为 LLM_* 的回退
 """
-import asyncio
+import argparse
 import json
+import os
 import re
-import subprocess
 import sys
-import requests
 from datetime import datetime
 from html.parser import HTMLParser
 
+import requests
 
-def get_config():
-    with open("/root/.openclaw/openclaw.json") as f:
-        return json.load(f)
+DAILY_URL = "https://github.com/trending"
+WEEKLY_URL = "https://github.com/trending?since=weekly"
 
-
-def get_token(app_id, app_secret):
-    r = subprocess.run([
-        "curl", "-s", "-X", "POST",
-        "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
-        "-H", "Content-Type: application/json",
-        "-d", json.dumps({"app_id": app_id, "app_secret": app_secret})
-    ], capture_output=True, text=True)
-    return json.loads(r.stdout)["tenant_access_token"]
-
-
-def extract_json_from_response(raw):
-    """Extract JSON from LLM response, stripping think/analysis tags."""
-    # Remove think/analyze blocks (various formats)
-    cleaned = re.sub(r'<thinking>[\s\S]*?</thinking>', '', raw, flags=re.IGNORECASE)
-    cleaned = re.sub(r'\[癢[\s\S]*?\]癢', '', cleaned)
-    cleaned = re.sub(r'\[\[[\s\S]*?\]\]', '', cleaned)
-    # Now look for JSON in the cleaned text
-    json_start = cleaned.rfind('{')
-    if json_start == -1:
-        raise ValueError("No '{' found after stripping think tags in: " + repr(raw[:300]))
-
-    after = cleaned[json_start:]
-    try:
-        json.loads(after)
-        return after.strip()
-    except Exception:
-        pass
-
-    # Brace counting: find matching }
-    depth = 0
-    for i, ch in enumerate(after):
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                return after[:i+1].strip()
-
-    raise ValueError("Could not find matching } in: " + repr(after[:200]))
-
-
-def llm_filter_both(daily, weekly, api_key, base_url, llm_model):
-    if not daily and not weekly:
-        return [], []
-
-    def make_list_section(label, repos):
-        lines = [f"{label}:"]
-        for i, r in enumerate(repos, 1):
-            desc = r["desc"][:150].strip() if r["desc"] else "(no desc)"
-            lines.append(f"  {i}. {r['name']} - {desc}")
-        return "\n".join(lines)
-
-    daily_section = make_list_section("DAILY_REPOS", daily)
-    weekly_section = make_list_section("WEEKLY_REPOS", weekly)
-
-    prompt = (
-        "You are an AI/ML expert. For each repo below, determine if it is AI/ML/LLM-related.\n\n"
-        f"{daily_section}\n\n{weekly_section}\n\n"
-        "Output ONLY valid JSON, no markdown, no explanation, no thinking tags:\n"
-        '{"daily_ai_repos": [daily_index1, ...], "weekly_ai_repos": [weekly_index1, ...]}\n\n'
-        "Rules:\n"
-        "- Include if related to: LLMs, AI models, ML, deep learning, AI agents, chatbots, "
-        "AI frameworks, AI SDKs, AI APIs, AI tools, generative AI, AI inference, fine-tuning, "
-        "RLHF, vector DBs, RAG, embeddings, diffusion, AI coding assistants.\n"
-        "- Exclude: qBittorrent, maigret (OSINT), chess engines, game emulators, hardware, "
-        "CLI tools without AI, package managers.\n"
-        "- Indexes are 1-based within each section separately.\n"
-        "- Return empty list [] for a section if nothing qualifies."
-    )
-
-    api_url = base_url + "/chat/completions"
-
-    try:
-        resp = requests.post(
-            api_url,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": llm_model,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 16000,
-                "temperature": 0.1,
-            },
-            timeout=90,
-        )
-        resp.raise_for_status()
-        raw_content = resp.json()["choices"][0]["message"]["content"]
-        if not raw_content:
-            raise ValueError("Empty content from API")
-
-        after = extract_json_from_response(raw_content)
-        if after.startswith("```"):
-            for part in after.split("```"):
-                part = part.strip()
-                if part.startswith("json"):
-                    part = part[4:].strip()
-                if part.startswith("{"):
-                    after = part
-                    break
-
-        result = json.loads(after)
-        daily_indices = result.get("daily_ai_repos", [])
-        weekly_indices = result.get("weekly_ai_repos", [])
-
-        daily_ai = [daily[i - 1] for i in daily_indices if 1 <= i <= len(daily)]
-        weekly_ai = [weekly[i - 1] for i in weekly_indices if 1 <= i <= len(weekly)]
-
-        return daily_ai, weekly_ai
-
-    except Exception as e:
-        print(f"LLM filter failed: {e}", file=sys.stderr)
-        return [], []
+DEFAULT_DAILY = 10
+DEFAULT_WEEKLY = 10
 
 
 class TrendingParser(HTMLParser):
     """Parse GitHub Trending HTML to extract repo info."""
+
     def __init__(self):
         super().__init__()
         self.in_article = False
@@ -154,8 +59,15 @@ class TrendingParser(HTMLParser):
 
         if tag == "article" and "Box-row" in cls:
             self.in_article = True
-            self.current_item = {"name": "", "url": "", "stars": "0", "desc": "",
-                                 "_raw": "", "period": "", "period_label": ""}
+            self.current_item = {
+                "name": "",
+                "url": "",
+                "stars": "0",
+                "desc": "",
+                "_raw": "",
+                "period": "",
+                "period_label": "",
+            }
             return
 
         if not self.in_article:
@@ -181,11 +93,13 @@ class TrendingParser(HTMLParser):
         if tag == "article" and self.in_article:
             if self.current_item and self.current_item.get("name"):
                 # 解析「本期新增星」：X stars today / X stars this week
-                mm = re.search(r"([\d,\.]+)\s+stars\s+(today|this week)",
-                               self.current_item.get("_raw", ""))
-                if mm:
-                    self.current_item["period"] = mm.group(1).replace(",", "")
-                    self.current_item["period_label"] = mm.group(2)
+                match = re.search(
+                    r"([\d,.]+)\s+stars\s+(today|this week)",
+                    self.current_item.get("_raw", ""),
+                )
+                if match:
+                    self.current_item["period"] = match.group(1).replace(",", "")
+                    self.current_item["period_label"] = match.group(2)
                 self.current_item.pop("_raw", None)
                 self.items.append(self.current_item)
             self.in_article = False
@@ -205,8 +119,8 @@ class TrendingParser(HTMLParser):
                 self.in_stars = False
                 if self.current_item:
                     text = self.current_text.strip().replace(",", "")
-                    m = re.match(r"([\d.]+)", text)
-                    self.current_item["stars"] = m.group(1) if m else "0"
+                    match = re.match(r"([\d.]+)", text)
+                    self.current_item["stars"] = match.group(1) if match else "0"
         elif tag == "p" and self.in_desc:
             self.in_desc = False
             if self.current_item:
@@ -220,179 +134,360 @@ class TrendingParser(HTMLParser):
 
 
 def fetch_trending(url):
-    """Sync fetch using requests + html.parser."""
-    resp = requests.get(url, timeout=15, headers={
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Referer": "https://github.com/",
-        "Cache-Control": "no-cache",
-        "Upgrade-Insecure-Requests": "1",
-    })
+    """抓取一页 GitHub Trending。"""
+    resp = requests.get(
+        url,
+        timeout=20,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://github.com/",
+        },
+    )
     resp.raise_for_status()
     parser = TrendingParser()
     parser.feed(resp.text)
     return parser.items
 
 
-def to_num(s):
+def extract_json_from_response(raw):
+    """从 LLM 响应中提取 JSON，容忍 think 标签和 markdown 代码围栏。"""
+    cleaned = re.sub(r"<thinking>[\s\S]*?</thinking>", "", raw, flags=re.IGNORECASE)
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\[癢[\s\S]*?\]癢", "", cleaned)
+    cleaned = re.sub(r"\[\[[\s\S]*?\]\]", "", cleaned)
+
+    json_start = cleaned.rfind("{")
+    if json_start == -1:
+        raise ValueError("响应中没有 JSON 对象: " + repr(raw[:300]))
+
+    after = cleaned[json_start:]
+
+    try:
+        json.loads(after)
+        return after.strip()
+    except Exception:
+        pass
+
+    depth = 0
+    for i, ch in enumerate(after):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return after[: i + 1].strip()
+
+    raise ValueError("无法匹配 JSON 括号: " + repr(after[:200]))
+
+
+def llm_filter_both(daily, weekly, api_key, base_url, model, timeout=90, max_tokens=16000):
+    """一次调用 LLM，返回两个列表中的 AI 相关仓库。失败时抛异常。"""
+    if not daily and not weekly:
+        return [], []
+
+    def make_list_section(label, repos):
+        lines = [f"{label}:"]
+        for i, repo in enumerate(repos, 1):
+            desc = repo["desc"][:150].strip() if repo["desc"] else "(no desc)"
+            lines.append(f"  {i}. {repo['name']} - {desc}")
+        return "\n".join(lines)
+
+    prompt = (
+        "You are an AI/ML expert. For each repo below, determine if it is AI/ML/LLM-related.\n\n"
+        f"{make_list_section('DAILY_REPOS', daily)}\n\n"
+        f"{make_list_section('WEEKLY_REPOS', weekly)}\n\n"
+        "Output ONLY valid JSON, no markdown, no explanation, no thinking tags:\n"
+        '{"daily_ai_repos": [daily_index1, ...], "weekly_ai_repos": [weekly_index1, ...]}\n\n'
+        "Rules:\n"
+        "- Include if related to: LLMs, AI models, ML, deep learning, AI agents, chatbots, "
+        "AI frameworks, AI SDKs, AI APIs, AI tools, generative AI, AI inference, fine-tuning, "
+        "RLHF, vector DBs, RAG, embeddings, diffusion, AI coding assistants.\n"
+        "- Exclude: qBittorrent, maigret (OSINT), chess engines, game emulators, hardware, "
+        "CLI tools without AI, package managers.\n"
+        "- Indexes are 1-based within each section separately.\n"
+        "- Return empty list [] for a section if nothing qualifies."
+    )
+
+    api_url = base_url.rstrip("/") + "/chat/completions"
+
+    try:
+        resp = requests.post(
+            api_url,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens,
+                "temperature": 0.1,
+            },
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        raw_content = resp.json()["choices"][0]["message"]["content"]
+    except Exception as exc:
+        raise RuntimeError(f"LLM 请求失败: {exc}") from exc
+
+    if not raw_content:
+        raise RuntimeError("LLM 返回了空内容")
+
+    after = extract_json_from_response(raw_content)
+
+    try:
+        result = json.loads(after)
+    except Exception as exc:
+        raise RuntimeError(f"无法解析 LLM 输出: {exc}; 原始内容: {raw_content[:300]!r}") from exc
+
+    daily_indices = result.get("daily_ai_repos", [])
+    weekly_indices = result.get("weekly_ai_repos", [])
+
+    daily_ai = [daily[i - 1] for i in daily_indices if isinstance(i, int) and 1 <= i <= len(daily)]
+    weekly_ai = [weekly[i - 1] for i in weekly_indices if isinstance(i, int) and 1 <= i <= len(weekly)]
+    return daily_ai, weekly_ai
+
+
+def to_num(value):
     """把 '32,314' / '3.4k' 之类转成数字，失败返回 0。"""
     try:
-        s = str(s).replace(",", "").strip()
-        if not s:
+        text = str(value).replace(",", "").strip()
+        if not text:
             return 0
-        return float(s) if "." in s else int(s)
+        return float(text) if "." in text else int(text)
     except Exception:
         return 0
 
 
-def topk(items, n=5):
-    return sorted(items, key=lambda x: to_num(x.get("stars")), reverse=True)[:n]
-
-
-def rank_items(items, n=10):
-    """按「本期新增星」降序取前 n；若无任何 period 数据则回退按总星排序。
-    返回 (ranked_list, has_period)。"""
-    has_period = any(x.get("period") for x in items)
-    if has_period:
-        ranked = sorted(items, key=lambda x: to_num(x.get("period")), reverse=True)
-    else:
-        ranked = sorted(items, key=lambda x: to_num(x.get("stars")), reverse=True)
-    return ranked[:n], has_period
-
-
-def fmt_stars(s):
+def fmt_stars(value):
     try:
-        s = str(s).replace(",", "")
-        v = float(s) if "." in s else int(s)
-        if v >= 1000:
-            return f"{v/1000:.1f}k"
-        return str(int(v))
-    except:
-        return str(s)
+        text = str(value).replace(",", "")
+        number = float(text) if "." in text else int(text)
+        if number >= 1000:
+            return f"{number / 1000:.1f}k"
+        return str(int(number))
+    except Exception:
+        return str(value)
 
 
-def ranked_list(title, items, n=10, period_word="今日"):
-    """items 需已排好序；n 重新裁剪以防越界。"""
-    top = items[:n]
+def rank_items(items, limit):
+    """按本期新增星降序；没有新增星数据时回退到累计星。"""
+    has_period = any(item.get("period") for item in items)
+    key = "period" if has_period else "stars"
+    ranked = sorted(items, key=lambda item: to_num(item.get(key)), reverse=True)[:limit]
+    return [
+        {**item, "rank": index}
+        for index, item in enumerate(ranked, 1)
+    ], has_period
+
+
+def ranked_markdown(title, items, period_word):
     lines = [f"**{title}**", ""]
-    for i, x in enumerate(top, 1):
-        s = fmt_stars(x["stars"])
-        name_link = f'[{x["name"]}]({x["url"]})'
-        desc = x["desc"][:100].replace("\n", " ").strip()
-        head = f"**{i}.** {name_link}  ⭐ {s}"
-        if x.get("period"):
-            head += f" ｜ 🔺 {period_word} +{fmt_stars(x['period'])}"
+    for item in items:
+        head = (
+            f"**{item['rank']}.** [{item['name']}]({item['url']})"
+            f"  ⭐ {fmt_stars(item['stars'])}"
+        )
+        if item.get("period"):
+            head += f" ｜ 🔺 {period_word} +{fmt_stars(item['period'])}"
         lines.append(head)
-        lines.append(f"   {desc}")
+
+        desc = (item.get("desc") or "").replace("\n", " ").strip()[:100]
+        if desc:
+            lines.append(f"   {desc}")
         lines.append("")
-    return {"tag": "markdown", "content": "\n".join(lines)}
+    return "\n".join(lines).rstrip()
 
 
-def build_card(daily_top, weekly_top, daily_period=True, weekly_period=True):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    daily_title = ("🎯 今日热门 AI 项目 Top10（按今日新增 ⭐ 排序）" if daily_period
-                   else "🎯 今日热门 AI 项目 Top10（按总 ⭐ 排序）")
-    weekly_title = ("📊 本周热门 AI 项目 Top10（按本周新增 ⭐ 排序）" if weekly_period
-                    else "📊 本周热门 AI 项目 Top10（按总 ⭐ 排序）")
-    elements = [
-        {"tag": "markdown", "content": f"📈 **GitHub AI Trending 日报**（{now}）"},
-        ranked_list(daily_title, daily_top, 10, "今日"),
-        {"tag": "hr"},
-        ranked_list(weekly_title, weekly_top, 10, "本周"),
-        {"tag": "note", "elements": [
-            {"tag": "plain_text", "content": "⭐=累计星 ｜ 🔺=本期新增星（排序依据）· 由 ArkClaw 自动生成 · 数据来源：github.com/trending"}
-        ]},
+def render_markdown(daily, weekly, daily_period, weekly_period, daily_limit, weekly_limit, now):
+    daily_sort = "按今日新增 ⭐ 排序" if daily_period else "按总 ⭐ 排序"
+    weekly_sort = "按本周新增 ⭐ 排序" if weekly_period else "按总 ⭐ 排序"
+
+    parts = [
+        f"📈 **GitHub AI Trending 日报**（{now}）",
+        "",
+        ranked_markdown(f"🎯 今日热门 AI 项目 Top{daily_limit}（{daily_sort}）", daily, "今日"),
+        "",
+        "---",
+        "",
+        ranked_markdown(f"📊 本周热门 AI 项目 Top{weekly_limit}（{weekly_sort}）", weekly, "本周"),
+        "",
+        "---",
+        "",
+        "⭐=累计星 ｜ 🔺=本期新增星（排序依据）",
+        "数据来源：github.com/trending",
     ]
-    return {
-        "config": {"wide_screen_mode": True},
-        "header": {
-            "title": {"tag": "plain_text", "content": f"📈 GitHub AI Trending 日报 {now}"},
-            "template": "blue",
+    return "\n".join(parts)
+
+
+def render_json(daily, weekly, daily_period, weekly_period, llm_filtered, fallback):
+    return json.dumps(
+        {
+            "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "source": DAILY_URL,
+            "llm_filtered": llm_filtered,
+            "fallback_to_all": fallback,
+            "daily": {
+                "sort": "period" if daily_period else "stars",
+                "items": daily,
+            },
+            "weekly": {
+                "sort": "period" if weekly_period else "stars",
+                "items": weekly,
+            },
         },
-        "elements": elements,
-    }
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
-def send_card(token, receive_id, card):
-    payload = json.dumps({
-        "receive_id": receive_id,
-        "msg_type": "interactive",
-        "content": json.dumps(card, ensure_ascii=False),
-    })
-    r = subprocess.run([
-        "curl", "-s", "-X", "POST",
-        "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id",
-        "-H", f"Authorization: Bearer {token}",
-        "-H", "Content-Type: application/json",
-        "-d", payload,
-    ], capture_output=True, text=True)
+def default_env(*names):
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return ""
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="抓取 GitHub Trending 并输出 AI 项目日报（不发送）"
+    )
+    parser.add_argument(
+        "--format",
+        choices=("markdown", "json"),
+        default="markdown",
+        help="输出格式（默认 markdown）",
+    )
+    parser.add_argument("--output", help="输出文件路径；不指定则写到 stdout")
+    parser.add_argument(
+        "--top-daily", type=int, default=DEFAULT_DAILY, help="今日条目数（默认 10）"
+    )
+    parser.add_argument(
+        "--top-weekly", type=int, default=DEFAULT_WEEKLY, help="本周条目数（默认 10）"
+    )
+    parser.add_argument("--no-llm", action="store_true", help="跳过 LLM 过滤")
+    parser.add_argument(
+        "--api-key",
+        default=default_env("LLM_API_KEY", "OPENAI_API_KEY"),
+        help="LLM API key（默认读 LLM_API_KEY / OPENAI_API_KEY）",
+    )
+    parser.add_argument(
+        "--base-url",
+        default=default_env("LLM_BASE_URL", "OPENAI_BASE_URL"),
+        help="OpenAI 兼容接口地址（默认读 LLM_BASE_URL / OPENAI_BASE_URL）",
+    )
+    parser.add_argument(
+        "--model",
+        default=default_env("LLM_MODEL", "OPENAI_MODEL"),
+        help="模型名（默认读 LLM_MODEL / OPENAI_MODEL）",
+    )
+    parser.add_argument("--timeout", type=int, default=90, help="LLM 请求超时秒数")
+    parser.add_argument("--max-tokens", type=int, default=16000, help="LLM 最大输出 token")
+    parser.add_argument(
+        "--fail-on-llm-error",
+        action="store_true",
+        help="LLM 过滤失败时以非零状态退出（默认回退为全部热门仓库）",
+    )
+    return parser.parse_args(argv)
+
+
+def write_output(text, output):
+    text = text.rstrip() + "\n"
+    if output:
+        with open(output, "w", encoding="utf-8") as file:
+            file.write(text)
+        print(f"已写入 {output}", file=sys.stderr)
+    else:
+        sys.stdout.write(text)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    api_key = (args.api_key or "").strip()
+    base_url = (args.base_url or "").strip()
+    model = (args.model or "").strip()
+
+    use_llm = not args.no_llm and bool(api_key and base_url and model)
+    if not args.no_llm and not use_llm:
+        print(
+            "未提供完整的 LLM 配置（LLM_API_KEY / LLM_BASE_URL / LLM_MODEL），跳过 AI 过滤。",
+            file=sys.stderr,
+        )
+
+    print("抓取 GitHub Trending（每日）...", file=sys.stderr)
     try:
-        resp = json.loads(r.stdout)
-    except:
-        print(f"响应解析失败: {r.stdout[:200]}", file=sys.stderr)
-        return False
-    if resp.get("code") in (0, None):
-        print("✅ 发送成功！")
-        return True
-    print(f"发送失败: {resp}", file=sys.stderr)
-    return False
+        daily_all = fetch_trending(DAILY_URL)
+        print(f"  每日: {len(daily_all)} 个仓库", file=sys.stderr)
 
+        print("抓取 GitHub Trending（每周）...", file=sys.stderr)
+        weekly_all = fetch_trending(WEEKLY_URL)
+        print(f"  每周: {len(weekly_all)} 个仓库", file=sys.stderr)
+    except Exception as exc:
+        print(f"抓取失败: {exc}", file=sys.stderr)
+        return 1
 
-def main_async():
-    config = get_config()
-    feishu = config["channels"]["feishu"]
-    receive_id = "<FEISHU_OPEN_ID>"
+    daily_pool, weekly_pool = daily_all, weekly_all
+    llm_filtered = False
 
-    primary = config["agents"]["defaults"]["model"]["primary"]
-    if "/" in primary:
-        provider_name, llm_model = primary.split("/", 1)
+    if use_llm:
+        print("LLM 过滤 AI 项目...", file=sys.stderr)
+        try:
+            daily_pool, weekly_pool = llm_filter_both(
+                daily_all,
+                weekly_all,
+                api_key,
+                base_url,
+                model,
+                timeout=args.timeout,
+                max_tokens=args.max_tokens,
+            )
+            llm_filtered = True
+            print(
+                f"  LLM 过滤: 每日 {len(daily_pool)} 个, 每周 {len(weekly_pool)} 个",
+                file=sys.stderr,
+            )
+        except Exception as exc:
+            print(f"LLM 过滤失败: {exc}", file=sys.stderr)
+            if args.fail_on_llm_error:
+                return 2
+            print("  回退为全部热门仓库", file=sys.stderr)
+
+    daily, daily_period = rank_items(daily_pool, args.top_daily)
+    weekly, weekly_period = rank_items(weekly_pool, args.top_weekly)
+
+    fallback = False
+    if not daily and not weekly:
+        print("未找到 AI 项目，回退为全部热门仓库", file=sys.stderr)
+        daily, daily_period = rank_items(daily_all, args.top_daily)
+        weekly, weekly_period = rank_items(weekly_all, args.top_weekly)
+        fallback = True
+
+    if args.format == "json":
+        text = render_json(
+            daily, weekly, daily_period, weekly_period, llm_filtered, fallback
+        )
     else:
-        provider_name, llm_model = "custom", primary
+        now = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
+        text = render_markdown(
+            daily,
+            weekly,
+            daily_period,
+            weekly_period,
+            args.top_daily,
+            args.top_weekly,
+            now,
+        )
 
-    providers = config["models"]["providers"]
-    if provider_name in providers:
-        p = providers[provider_name]
-    else:
-        p = providers.get("custom", {})
-    api_key = p["apiKey"]
-    base_url = p["baseUrl"]
-
-    print("🌐 抓取 GitHub Trending（每日）...")
-    daily = fetch_trending("https://github.com/trending")
-    print(f"   每日: {len(daily)} repos")
-
-    print("🌐 抓取 GitHub Trending（每周）...")
-    weekly = fetch_trending("https://github.com/trending?since=weekly")
-    print(f"   每周: {len(weekly)} repos")
-
-    print("🤖 LLM 过滤 AI 项目（一次调用）...")
-    daily_ai, weekly_ai = llm_filter_both(daily, weekly, api_key, base_url, llm_model)
-    print(f"   LLM 过滤: 每日 {len(daily_ai)} 个, 每周 {len(weekly_ai)} 个")
-
-    daily_top, daily_period = rank_items(daily_ai, 10)
-    weekly_top, weekly_period = rank_items(weekly_ai, 10)
-    print(f"🏆 每日(按本期新增): {', '.join(x['name'] for x in daily_top)}")
-    print(f"🏆 每周(按本期新增): {', '.join(x['name'] for x in weekly_top)}")
-    if not daily_period:
-        print("⚠️ 每日榜未解析到新增星，回退按总星排序")
-    if not weekly_period:
-        print("⚠️ 每周榜未解析到新增星，回退按总星排序")
-
-    if not daily_top and not weekly_top:
-        print("⚠️ 未找到AI项目，使用全部热门备选")
-        daily_top, daily_period = rank_items(daily, 10)
-        weekly_top, weekly_period = rank_items(weekly, 10)
-
-    token = get_token(feishu["appId"], feishu["appSecret"])
-    card = build_card(daily_top, weekly_top, daily_period, weekly_period)
-    send_card(token, receive_id, card)
-
-
-def main():
-    main_async()
+    write_output(text, args.output)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

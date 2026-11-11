@@ -53,6 +53,27 @@ Cursor 从仓库根目录的 `.cursor-plugin/marketplace.json` 读取插件目�
 Team marketplace 需要 Cursor Teams 或 Enterprise 套餐。公开分发可把同一仓库提交到
 [Cursor Marketplace](https://cursor.com/marketplace/publish)。
 
+## 日报脚本
+
+仓库根目录的两个脚本只负责抓取和整理数据，输出 Markdown 或 JSON，**不包含发送逻辑**；发到哪个渠道、发给谁，由 OpenClaw 或其他调用方决定。
+
+```bash
+# GitHub AI Trending
+python3 github_ai_trending_daily.py --format markdown
+
+# Hacker News
+python3 hackernews_daily.py --format json --output /tmp/hn.json
+```
+
+需要 AI 过滤/中文解读时，通过环境变量提供任意 OpenAI 兼容接口：
+
+```bash
+LLM_API_KEY=... LLM_BASE_URL=https://api.example.com/v1 LLM_MODEL=... \
+  python3 github_ai_trending_daily.py
+```
+
+未配置 LLM 时会跳过 AI 步骤，只输出抓取结果。进度和警告写到 stderr，报告正文写到 stdout（或 `--output` 指定的文件）。
+
 ## Marketplace manifests
 
 - Claude Code / Codex：`.claude-plugin/marketplace.json`

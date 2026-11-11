@@ -6,3 +6,8 @@ __pycache__/
 
 # Lesson-local watermark config contains a secret key; never commit it.
 watermark.json
+
+# Local credentials and generated artifacts
+cookies.json
+data/
+.restoration-work/

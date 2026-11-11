@@ -1,153 +1,135 @@
 #!/usr/bin/env python3
 """
-Hacker News 每日早报 - Algolia API -> 本地存档 -> LLM 总结 -> 飞书卡片
+Hacker News 每日早报。
+
+抓取 Hacker News -> 可选 LLM 生成中文解读 -> 输出 Markdown 或 JSON。
+
+脚本只负责取数和整理，不包含任何发送逻辑，也不读取 OpenClaw 配置；
+发到哪个渠道、发给谁，由调用方（OpenClaw 或其他 agent）决定。
+
+用法:
+    python3 hackernews_daily.py
+    python3 hackernews_daily.py --format json
+    python3 hackernews_daily.py --output /tmp/hn.md
+    LLM_API_KEY=... LLM_BASE_URL=... LLM_MODEL=... \
+        python3 hackernews_daily.py
+
+环境变量:
+    LLM_API_KEY   OpenAI 兼容接口的 API key；三项齐全时才启用 AI 解读
+    LLM_BASE_URL  接口地址，例如 https://api.openai.com/v1
+    LLM_MODEL     模型名，例如 gpt-4o-mini
+    OPENAI_API_KEY / OPENAI_BASE_URL / OPENAI_MODEL  作为 LLM_* 的回退
 """
+import argparse
 import json
-import subprocess
-import sys
-import requests
+import os
 import re
-import uuid
-from datetime import datetime, timezone, timedelta
+import sys
+from datetime import datetime, timedelta, timezone
 
+import requests
 
-def get_config():
-    with open("/root/.openclaw/openclaw.json") as f:
-        return json.load(f)
+TZ_BEIJING = timezone(timedelta(hours=8))
+HN_ITEM_URL = "https://news.ycombinator.com/item?id={object_id}"
+SOURCE_URL = "https://news.ycombinator.com"
 
-
-def get_token(app_id, app_secret):
-    r = subprocess.run([
-        "curl", "-s", "-X", "POST",
-        "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
-        "-H", "Content-Type: application/json",
-        "-d", json.dumps({"app_id": app_id, "app_secret": app_secret})
-    ], capture_output=True, text=True)
-    return json.loads(r.stdout)["tenant_access_token"]
+DEFAULT_TODAY = 10
+DEFAULT_WEEKLY = 15
 
 
 def fetch_hn_today(limit=20):
-    """抓取今日 HN Top（北京时间当天）"""
+    """抓取今日 HN Top（北京时间当天）。"""
     url = "https://hn.algolia.com/api/v1/search"
-    params = {"tags": "front_page", "hitsPerPage": limit}
-    resp = requests.get(url, params=params, timeout=30)
+    resp = requests.get(
+        url, params={"tags": "front_page", "hitsPerPage": limit}, timeout=30
+    )
     resp.raise_for_status()
     hits = resp.json().get("hits", [])
 
-    bj = timezone(timedelta(hours=8))
-    now_bj = datetime.now(bj)
+    now_bj = datetime.now(TZ_BEIJING)
     today_start = now_bj.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    filtered = []
-    for h in hits:
-        ts = h.get("created_at", "")
-        if not ts:
+    items = []
+    for hit in hits:
+        created_at = hit.get("created_at", "")
+        if not created_at:
             continue
-        dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(bj)
-        if dt >= today_start:
-            filtered.append({
-                "title": h.get("title", ""),
-                "url": h.get("url", ""),
-                "points": h.get("points", 0),
-                "author": h.get("author", ""),
-                "objectID": h.get("objectID", ""),
-                "created_at": dt.strftime("%Y-%m-%d %H:%M"),
-            })
+        moment = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(
+            TZ_BEIJING
+        )
+        if moment >= today_start:
+            object_id = hit.get("objectID", "")
+            items.append(
+                {
+                    "title": hit.get("title", ""),
+                    "url": hit.get("url", "") or HN_ITEM_URL.format(object_id=object_id),
+                    "points": hit.get("points", 0),
+                    "author": hit.get("author", ""),
+                    "created_at": moment.strftime("%Y-%m-%d %H:%M"),
+                    "object_id": object_id,
+                }
+            )
 
-    return sorted(filtered, key=lambda x: -x["points"])
+    return sorted(items, key=lambda item: -item["points"])
 
 
 def fetch_hn_weekly(limit=50):
-    """抓取本周 HN Top（7天内），用 Algolia 日期过滤"""
-    bj = timezone(timedelta(hours=8))
-    now_bj = datetime.now(bj)
-    week_ago = now_bj - timedelta(days=7)
-    week_ts = int(week_ago.timestamp())
+    """抓取本周 HN Top（最近 7 天）。"""
+    now_bj = datetime.now(TZ_BEIJING)
+    week_ago_ts = int((now_bj - timedelta(days=7)).timestamp())
 
     url = "https://hn.algolia.com/api/v1/search"
-    params = {
-        "tags": "front_page",
-        "hitsPerPage": limit,
-        "numericFilters": f"created_at_i>{week_ts}",
-    }
-    resp = requests.get(url, params=params, timeout=30)
+    resp = requests.get(
+        url,
+        params={
+            "tags": "front_page",
+            "hitsPerPage": limit,
+            "numericFilters": f"created_at_i>{week_ago_ts}",
+        },
+        timeout=30,
+    )
     resp.raise_for_status()
     hits = resp.json().get("hits", [])
 
-    results = []
-    for h in hits:
-        ts = h.get("created_at", "")
-        if not ts:
+    items = []
+    for hit in hits:
+        created_at = hit.get("created_at", "")
+        if not created_at:
             continue
-        dt = datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone(bj)
-        sid = h.get("objectID", "")
-        results.append({
-            "title": h.get("title", ""),
-            "url": h.get("url", f"https://news.ycombinator.com/item?id={sid}"),
-            "points": h.get("points", 0),
-            "author": h.get("author", ""),
-            "objectID": sid,
-            "created_at": dt.strftime("%Y-%m-%d %H:%M"),
-        })
+        moment = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(
+            TZ_BEIJING
+        )
+        object_id = hit.get("objectID", "")
+        items.append(
+            {
+                "title": hit.get("title", ""),
+                "url": hit.get("url", "") or HN_ITEM_URL.format(object_id=object_id),
+                "points": hit.get("points", 0),
+                "author": hit.get("author", ""),
+                "created_at": moment.strftime("%Y-%m-%d %H:%M"),
+                "object_id": object_id,
+            }
+        )
 
-    return sorted(results, key=lambda x: -x["points"])[:15]
-
-
-def save_raw(today, weekly):
-    """原始数据存档到 /tmp/hn_YYYY-MM-DD_[4位uuid].txt"""
-    today_str = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
-    suffix = uuid.uuid4().hex[:4]
-    filepath = f"/tmp/hn_{today_str}_{suffix}.txt"
-
-    lines = ["[TODAY]\n"]
-    for i, item in enumerate(today, 1):
-        lines.append(f"{i}. {item['title']} | {item['url']} | {item['points']} pts | {item['author']} | {item['created_at']}")
-
-    lines.append("\n[WEEKLY]\n")
-    for i, item in enumerate(weekly, 1):
-        lines.append(f"{i}. {item['title']} | {item['url']} | {item['points']} pts | {item['author']} | {item['created_at']}")
-
-    with open(filepath, "w") as f:
-        f.write("\n".join(lines))
-
-    print(f"   原始数据已存档: {filepath}")
-    return filepath
+    return sorted(items, key=lambda item: -item["points"])
 
 
 def extract_json_from_response(raw):
-    """从 LLM 响应内容中提取 JSON，去除 think tags，取第一个 { 到配对 } 的内容"""
-    # 去除 <think>...</think> thinking tags
-    cleaned = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL)
+    """从 LLM 响应中提取 JSON，容忍 think 标签和 markdown 代码围栏。"""
+    cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL)
 
-    # 找第一个 {
-    json_start = cleaned.find('{')
+    json_start = cleaned.find("{")
     if json_start == -1:
-        raise ValueError("No '{' found in response: " + repr(raw[:200]))
+        raise ValueError("响应中没有 JSON 对象: " + repr(raw[:200]))
 
     after = cleaned[json_start:]
 
-    # 先尝试直接解析
     try:
         json.loads(after)
         return after.strip()
     except Exception:
         pass
 
-    # 尝试去除 markdown code fences
-    after_clean = after.strip()
-    if after_clean.startswith("```"):
-        for part in after_clean.split("```"):
-            part = part.strip()
-            if part.startswith("json"):
-                part = part[4:].strip()
-            if part.startswith("{"):
-                try:
-                    json.loads(part)
-                    return part
-                except Exception:
-                    pass
-
-    # Brace counting：找配对的闭合 }
     depth = 0
     for i, ch in enumerate(after):
         if ch == "{":
@@ -155,99 +137,19 @@ def extract_json_from_response(raw):
         elif ch == "}":
             depth -= 1
             if depth == 0:
-                return after[:i+1].strip()
+                return after[: i + 1].strip()
 
-    raise ValueError("Could not find matching } in: " + repr(after[:200]))
+    raise ValueError("无法匹配 JSON 括号: " + repr(after[:200]))
 
 
-def llm_summarize(filepath, api_key, base_url, llm_model, retries=3, retry_delay=5):
-    """读取本地存档，LLM 批量生成描述（失败自动重试）"""
-    with open(filepath) as f:
-        raw_content = f.read()
-
-    today_str = datetime.now(timezone(timedelta(hours=8))).strftime("%Y年%m月%d日")
-
-    prompt = f"""以下是从 Hacker News 抓取的今日 Top 和本周 Top 新闻，请为每条生成约100字的中文解读，说明该新闻的背景、意义或值得关注的点。
-
-{raw_content}
-
-Output ONLY valid JSON，格式如下（不要输出任何其他内容）：
-{{
-  "today": [
-    {{"desc": "这条新闻的中文解读，约100字"}},
-    ...
-  ],
-  "weekly": [
-    {{"desc": "这条新闻的中文解读，约100字"}},
-    ...
-  ]
-}}
-"""
-
-    system_prompt = "You are a tech news curator. Output ONLY valid JSON. Do NOT use <think> or </think> tags. Do NOT use markdown fences."
-
+def llm_call(prompt, api_key, base_url, model, retries=3, retry_delay=5, max_tokens=8000, timeout=120):
+    """调用 LLM 一次（带重试），返回清洗后的文本；失败返回 None。"""
+    system_prompt = (
+        "You are a tech news curator. Output ONLY valid JSON. "
+        "Do NOT use <think> or </think> tags. Do NOT use markdown fences."
+    )
     payload = {
-        "model": llm_model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ],
-        "max_tokens": 3000,
-        "temperature": 0.1,
-    }
-
-    if "MiniMax" in llm_model or "minimax" in llm_model.lower():
-        payload["skip"] = ["think"]
-
-    api_url = base_url + "/chat/completions"
-
-    import time as _time
-
-    last_err = None
-    for attempt in range(1, retries + 1):
-        if attempt > 1:
-            print(f"   LLM 解读失败，{retry_delay}s 后重试 ({attempt}/{retries})...", file=sys.stderr)
-            _time.sleep(retry_delay)
-        try:
-            resp = requests.post(
-                api_url,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-                timeout=90,
-            )
-            resp.raise_for_status()
-            raw = resp.json()["choices"][0]["message"]["content"]
-            if not raw:
-                raise ValueError("Empty content from API")
-
-            after = extract_json_from_response(raw)
-            if after.startswith("```"):
-                for part in after.split("```"):
-                    part = part.strip()
-                    if part.startswith("json"):
-                        part = part[4:].strip()
-                    if part.startswith("{"):
-                        after = part
-                        break
-
-            return json.loads(after)
-
-        except Exception as e:
-            last_err = e
-            print(f"LLM summarize failed (attempt {attempt}): {e}", file=sys.stderr)
-
-    print(f"LLM summarize failed after {retries} attempts: {last_err}", file=sys.stderr)
-    return None
-
-
-def llm_call(prompt, api_key, base_url, llm_model, retries=3, retry_delay=5, max_tokens=8000):
-    """调用 LLM 一次（带重试），返回清洗后的原始文本，失败返回 None。"""
-    system_prompt = "You are a tech news curator. Output ONLY valid JSON. Do NOT use <think> or </think> tags. Do NOT use markdown fences."
-    payload = {
-        "model": llm_model,
+        "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
@@ -255,17 +157,21 @@ def llm_call(prompt, api_key, base_url, llm_model, retries=3, retry_delay=5, max
         "max_tokens": max_tokens,
         "temperature": 0.1,
     }
-    if "MiniMax" in llm_model or "minimax" in llm_model.lower():
+    if "minimax" in model.lower():
         payload["skip"] = ["think"]
 
-    api_url = base_url + "/chat/completions"
-    import time as _time
+    api_url = base_url.rstrip("/") + "/chat/completions"
 
-    last_err = None
+    import time
+
+    last_error = None
     for attempt in range(1, retries + 1):
         if attempt > 1:
-            print(f"   LLM 调用失败，{retry_delay}s 后重试 ({attempt}/{retries})...", file=sys.stderr)
-            _time.sleep(retry_delay)
+            print(
+                f"   LLM 调用失败，{retry_delay}s 后重试 ({attempt}/{retries})...",
+                file=sys.stderr,
+            )
+            time.sleep(retry_delay)
         try:
             resp = requests.post(
                 api_url,
@@ -274,14 +180,14 @@ def llm_call(prompt, api_key, base_url, llm_model, retries=3, retry_delay=5, max
                     "Content-Type": "application/json",
                 },
                 json=payload,
-                timeout=120,
+                timeout=timeout,
             )
             resp.raise_for_status()
             raw = resp.json()["choices"][0]["message"]["content"]
             if not raw:
-                raise ValueError("Empty content from API")
+                raise ValueError("LLM 返回了空内容")
 
-            cleaned = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+            cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
             if cleaned.startswith("```"):
                 for part in cleaned.split("```"):
                     part = part.strip()
@@ -291,71 +197,79 @@ def llm_call(prompt, api_key, base_url, llm_model, retries=3, retry_delay=5, max
                         cleaned = part
                         break
             return cleaned
-        except Exception as e:
-            last_err = e
-            print(f"LLM call failed (attempt {attempt}): {e}", file=sys.stderr)
+        except Exception as exc:
+            last_error = exc
+            print(f"LLM call failed (attempt {attempt}): {exc}", file=sys.stderr)
 
-    print(f"LLM call failed after {retries} attempts: {last_err}", file=sys.stderr)
+    print(f"LLM call failed after {retries} attempts: {last_error}", file=sys.stderr)
     return None
 
 
 def parse_desc_list(raw):
-    """把 LLM 输出解析成 [{'desc': ...}] 列表，容忍 JSON 被截断。
-
-    策略：
-    1) 直接 json.loads（兼容 [..] 或 {'today': [..]} 等嵌套结构）；
-    2) 若截断导致解析失败，用正则逐个抢救已完整的 {"desc": "..."} 对象。
-    """
+    """把 LLM 输出解析成 [{'desc': ...}]，容忍 JSON 被截断。"""
     if not raw:
         return None
 
     try:
         data = json.loads(raw)
         if isinstance(data, dict):
-            for v in data.values():
-                if isinstance(v, list):
-                    data = v
+            for value in data.values():
+                if isinstance(value, list):
+                    data = value
                     break
         if isinstance(data, list):
             out = []
-            for d in data:
-                if isinstance(d, dict):
-                    out.append({"desc": d.get("desc", "")})
-                elif isinstance(d, str):
-                    out.append({"desc": d})
+            for item in data:
+                if isinstance(item, dict):
+                    out.append({"desc": item.get("desc", "")})
+                elif isinstance(item, str):
+                    out.append({"desc": item})
             if out:
                 return out
     except Exception:
         pass
 
-    # 抢救：匹配所有已完整的 {"desc": "..."}（正确处理转义引号）
     salvaged = []
-    for m in re.finditer(r'\{\s*"desc"\s*:\s*"(?:[^"\\]|\\.)*"\s*\}', raw):
+    for match in re.finditer(r'\{\s*"desc"\s*:\s*"(?:[^"\\]|\\.)*"\s*\}', raw):
         try:
-            salvaged.append(json.loads(m.group(0)))
+            salvaged.append(json.loads(match.group(0)))
         except Exception:
             pass
     if salvaged:
-        print(f"   ⚠️ JSON 被截断，已抢救出 {len(salvaged)} 条完整解读", file=sys.stderr)
+        print(
+            f"   ⚠️ JSON 被截断，已抢救出 {len(salvaged)} 条完整解读",
+            file=sys.stderr,
+        )
         return salvaged
 
     return None
 
 
-def llm_summarize_section(items, section_name, api_key, base_url, llm_model,
-                         retries=3, retry_delay=5, max_tokens=8000):
-    """对单个板块（today / weekly）单独调用 LLM 生成解读，输出扁平 JSON 数组。"""
+def llm_summarize_section(
+    items,
+    section_name,
+    api_key,
+    base_url,
+    model,
+    retries=3,
+    retry_delay=5,
+    max_tokens=8000,
+    timeout=120,
+):
+    """对单个板块生成中文解读，输出扁平 JSON 数组；失败返回 None。"""
     if not items:
         return []
 
     lines = []
-    for i, it in enumerate(items, 1):
-        lines.append(f"{i}. {it['title']} | {it['url']} | {it['points']} pts | {it['author']} | {it['created_at']}")
-    body = "\n".join(lines)
+    for index, item in enumerate(items, 1):
+        lines.append(
+            f"{index}. {item['title']} | {item['url']} | "
+            f"{item['points']} pts | {item['author']} | {item['created_at']}"
+        )
 
     prompt = f"""以下是从 Hacker News 抓取的{section_name}，请为每条生成约100字的中文解读，说明该新闻的背景、意义或值得关注的点。
 
-{body}
+{chr(10).join(lines)}
 
 Output ONLY a valid JSON array, 条目顺序与上面一一对应，格式如下（不要输出任何其他内容）：
 [
@@ -363,146 +277,255 @@ Output ONLY a valid JSON array, 条目顺序与上面一一对应，格式如下
   {{"desc": "第2条的中文解读，约100字"}}
 ]
 """
-    raw = llm_call(prompt, api_key, base_url, llm_model, retries, retry_delay, max_tokens)
+    raw = llm_call(
+        prompt,
+        api_key,
+        base_url,
+        model,
+        retries,
+        retry_delay,
+        max_tokens,
+        timeout,
+    )
     return parse_desc_list(raw)
 
 
-def build_card(today_items, weekly_items, today_desc, weekly_desc, summary_failed=False):
-    today_str = datetime.now(timezone(timedelta(hours=8))).strftime("%Y年%m月%d日")
+def fmt_item(item, index, desc):
+    lines = [
+        f"**{index}.** [{item['title']}]({item['url']})",
+        f"   🔥 {item['points']} pts · 👤 {item['author']} · 🕐 {item['created_at']}",
+    ]
+    if desc:
+        lines.append(f"   💬 {desc}")
+    return "\n".join(lines)
 
-    # 解读失败时在头部加提示
-    notify_elements = []
-    if summary_failed:
-        notify_elements.append({
-            "tag": "markdown",
-            "content": "⚠️ 本次 AI 解读生成失败，以下仅展示标题与链接。"
-        })
-        notify_elements.append({"tag": "hr"})
 
-    def fmt_item(item, i, desc):
-        title = item["title"]
-        url = item["url"] or f"https://news.ycombinator.com/item?id={item['objectID']}"
-        points = item["points"]
-        author = item["author"]
-        ts = item["created_at"]
-        title_link = f"[{title}]({url})"
-        desc_text = f"\n   💬 {desc}" if desc else ""
-        return (
-            f"**{i}.** {title_link}\n"
-            f"   🔥 {points} pts · 👤 {author} · 🕐 {ts}{desc_text}"
+def render_markdown(today, weekly, today_desc, weekly_desc, summary_attempted, summary_failed):
+    now_bj = datetime.now(TZ_BEIJING)
+    date_text = now_bj.strftime("%Y年%m月%d日")
+
+    parts = []
+    if summary_attempted and summary_failed:
+        parts += ["⚠️ 本次 AI 解读生成失败，以下仅展示标题与链接。", "", "---", ""]
+
+    parts.append(f"📰 **Hacker News 今日 Top**（{date_text}）")
+    parts.append("")
+    if today:
+        blocks = []
+        for index, item in enumerate(today, 1):
+            desc = ""
+            if today_desc and index <= len(today_desc):
+                desc = today_desc[index - 1].get("desc", "")
+            blocks.append(fmt_item(item, index, desc))
+        parts.append("\n\n─────────\n\n".join(blocks))
+    else:
+        parts.append("_今日暂无新增热门条目_")
+
+    parts += ["", "---", "", "📊 **本周 HN Top**", ""]
+    if weekly:
+        blocks = []
+        for index, item in enumerate(weekly, 1):
+            desc = ""
+            if weekly_desc and index <= len(weekly_desc):
+                desc = weekly_desc[index - 1].get("desc", "")
+            blocks.append(fmt_item(item, index, desc))
+        parts.append("\n\n─────────\n\n".join(blocks))
+    else:
+        parts.append("_本周暂无热门条目_")
+
+    parts += ["", "---", "", "数据来源：news.ycombinator.com"]
+    return "\n".join(parts)
+
+
+def render_json(today, weekly, today_desc, weekly_desc, summary_generated, summary_attempted):
+    def merge(items, descs):
+        merged = []
+        for index, item in enumerate(items):
+            entry = dict(item)
+            entry["desc"] = (
+                descs[index].get("desc", "")
+                if descs and index < len(descs)
+                else ""
+            )
+            merged.append(entry)
+        return merged
+
+    return json.dumps(
+        {
+            "generated_at": datetime.now(TZ_BEIJING).isoformat(timespec="seconds"),
+            "source": SOURCE_URL,
+            "summary_attempted": summary_attempted,
+            "summary_generated": summary_generated,
+            "today": merge(today, today_desc),
+            "weekly": merge(weekly, weekly_desc),
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+def default_env(*names):
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return ""
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="抓取 Hacker News 并输出中文早报（不发送）"
+    )
+    parser.add_argument(
+        "--format",
+        choices=("markdown", "json"),
+        default="markdown",
+        help="输出格式（默认 markdown）",
+    )
+    parser.add_argument("--output", help="输出文件路径；不指定则写到 stdout")
+    parser.add_argument(
+        "--today-limit", type=int, default=DEFAULT_TODAY, help="今日条目数（默认 10）"
+    )
+    parser.add_argument(
+        "--weekly-limit", type=int, default=DEFAULT_WEEKLY, help="本周条目数（默认 15）"
+    )
+    parser.add_argument(
+        "--fetch-today", type=int, default=20, help="今日抓取条数（默认 20）"
+    )
+    parser.add_argument(
+        "--fetch-weekly", type=int, default=50, help="本周抓取条数（默认 50）"
+    )
+    parser.add_argument("--no-llm", action="store_true", help="跳过 LLM 解读")
+    parser.add_argument(
+        "--api-key",
+        default=default_env("LLM_API_KEY", "OPENAI_API_KEY"),
+        help="LLM API key（默认读 LLM_API_KEY / OPENAI_API_KEY）",
+    )
+    parser.add_argument(
+        "--base-url",
+        default=default_env("LLM_BASE_URL", "OPENAI_BASE_URL"),
+        help="OpenAI 兼容接口地址（默认读 LLM_BASE_URL / OPENAI_BASE_URL）",
+    )
+    parser.add_argument(
+        "--model",
+        default=default_env("LLM_MODEL", "OPENAI_MODEL"),
+        help="模型名（默认读 LLM_MODEL / OPENAI_MODEL）",
+    )
+    parser.add_argument("--timeout", type=int, default=120, help="LLM 请求超时秒数")
+    parser.add_argument("--max-tokens", type=int, default=8000, help="LLM 最大输出 token")
+    parser.add_argument(
+        "--fail-on-llm-error",
+        action="store_true",
+        help="LLM 解读失败时以非零状态退出（默认仅省略解读）",
+    )
+    return parser.parse_args(argv)
+
+
+def write_output(text, output):
+    text = text.rstrip() + "\n"
+    if output:
+        with open(output, "w", encoding="utf-8") as file:
+            file.write(text)
+        print(f"已写入 {output}", file=sys.stderr)
+    else:
+        sys.stdout.write(text)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    api_key = (args.api_key or "").strip()
+    base_url = (args.base_url or "").strip()
+    model = (args.model or "").strip()
+
+    use_llm = not args.no_llm and bool(api_key and base_url and model)
+    if not args.no_llm and not use_llm:
+        print(
+            "未提供完整的 LLM 配置（LLM_API_KEY / LLM_BASE_URL / LLM_MODEL），跳过 AI 解读。",
+            file=sys.stderr,
         )
 
-    today_lines = []
-    if today_items:
-        for i, item in enumerate(today_items, 1):
-            desc = today_desc[i - 1]["desc"] if today_desc and i <= len(today_desc) else ""
-            today_lines.append(fmt_item(item, i, desc))
-    else:
-        today_lines.append("_今日暂无新增热门条目_")
-
-    weekly_lines = []
-    for i, item in enumerate(weekly_items, 1):
-        desc = weekly_desc[i - 1]["desc"] if weekly_desc and i <= len(weekly_desc) else ""
-        weekly_lines.append(fmt_item(item, i, desc))
-
-    elements = list(notify_elements)
-    elements += [
-        {"tag": "markdown", "content": f"📰 **Hacker News 今日 Top**（{today_str}）"},
-        {"tag": "markdown", "content": "\n\n─────────\n\n".join(today_lines)},
-        {"tag": "hr"},
-        {"tag": "markdown", "content": f"📊 **本周 HN Top 15**"},
-        {"tag": "markdown", "content": "\n\n─────────\n\n".join(weekly_lines)},
-        {"tag": "note", "elements": [
-            {"tag": "plain_text", "content": "由 ArkClaw 自动生成 · 数据来源：news.ycombinator.com"}
-        ]},
-    ]
-
-    return {
-        "config": {"wide_screen_mode": True},
-        "header": {
-            "title": {"tag": "plain_text", "content": f"📰 Hacker News 早报 {today_str}"},
-            "template": "orange",
-        },
-        "elements": elements,
-    }
-
-
-def send_card(token, receive_id, card):
-    payload = json.dumps({
-        "receive_id": receive_id,
-        "msg_type": "interactive",
-        "content": json.dumps(card, ensure_ascii=False),
-    })
-    r = subprocess.run([
-        "curl", "-s", "-X", "POST",
-        "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id",
-        "-H", f"Authorization: Bearer {token}",
-        "-H", "Content-Type: application/json",
-        "-d", payload,
-    ], capture_output=True, text=True)
+    print("抓取 Hacker News 今日 Top...", file=sys.stderr)
     try:
-        resp = json.loads(r.stdout)
-    except:
-        print(f"响应解析失败: {r.stdout[:200]}", file=sys.stderr)
-        return False
-    if resp.get("code") in (0, None):
-        print("✅ 发送成功！")
-        return True
-    print(f"发送失败: {resp}", file=sys.stderr)
-    return False
+        today_all = fetch_hn_today(args.fetch_today)
+        print(f"  今日: {len(today_all)} 条", file=sys.stderr)
 
+        print("抓取 Hacker News 本周 Top...", file=sys.stderr)
+        weekly_all = fetch_hn_weekly(args.fetch_weekly)
+        print(f"  本周: {len(weekly_all)} 条", file=sys.stderr)
+    except Exception as exc:
+        print(f"抓取失败: {exc}", file=sys.stderr)
+        return 1
 
-def main():
-    print("📰 抓取 Hacker News 今日 Top...")
-    today = fetch_hn_today(20)
-    print(f"   今日: {len(today)} 条")
+    today = today_all[: args.today_limit]
+    weekly = weekly_all[: args.weekly_limit]
 
-    print("📊 抓取 Hacker News 本周 Top...")
-    weekly = fetch_hn_weekly(50)
-    print(f"   本周: {len(weekly)} 条")
+    today_desc = []
+    weekly_desc = []
+    summary_attempted = use_llm
+    summary_failed = False
 
-    print("💾 保存原始数据...")
-    filepath = save_raw(today, weekly)
+    if use_llm:
+        print("LLM 生成中文解读（今日 / 本周分别调用）...", file=sys.stderr)
+        today_desc = llm_summarize_section(
+            today,
+            "今日 Top 新闻",
+            api_key,
+            base_url,
+            model,
+            max_tokens=args.max_tokens,
+            timeout=args.timeout,
+        )
+        weekly_desc = llm_summarize_section(
+            weekly,
+            "本周 Top 新闻",
+            api_key,
+            base_url,
+            model,
+            max_tokens=args.max_tokens,
+            timeout=args.timeout,
+        )
 
-    # 加载配置
-    config = get_config()
-    feishu = config["channels"]["feishu"]
-    receive_id = "<FEISHU_OPEN_ID>"
+        if today_desc is None:
+            today_desc = []
+        if weekly_desc is None:
+            weekly_desc = []
 
-    primary = config["agents"]["defaults"]["model"]["primary"]
-    if "/" in primary:
-        provider_name, llm_model = primary.split("/", 1)
+        summary_failed = not today_desc and not weekly_desc
+        print(
+            f"  今日解读: {len(today_desc)} 条, 本周解读: {len(weekly_desc)} 条",
+            file=sys.stderr,
+        )
+        if summary_failed:
+            print("  ⚠️ 解读生成失败，仅输出标题与链接", file=sys.stderr)
+            if args.fail_on_llm_error:
+                return 2
+        elif len(today_desc) < len(today) or len(weekly_desc) < len(weekly):
+            print("  ⚠️ 部分解读缺失，已输出已有部分", file=sys.stderr)
+
+    summary_generated = bool(today_desc or weekly_desc)
+
+    if args.format == "json":
+        text = render_json(
+            today,
+            weekly,
+            today_desc,
+            weekly_desc,
+            summary_generated,
+            summary_attempted,
+        )
     else:
-        provider_name, llm_model = "custom", primary
+        text = render_markdown(
+            today,
+            weekly,
+            today_desc,
+            weekly_desc,
+            summary_attempted,
+            summary_failed,
+        )
 
-    providers = config["models"]["providers"]
-    if provider_name in providers:
-        p = providers[provider_name]
-    else:
-        p = providers.get("custom", {})
-    api_key = p["apiKey"]
-    base_url = p["baseUrl"]
-
-    print("🤖 LLM 生成中文解读（拆分：今日 / 本周 各自调用）...")
-    today_desc = llm_summarize_section(today[:10], "今日 Top 新闻", api_key, base_url, llm_model)
-    if today_desc is None:
-        today_desc = []
-    weekly_desc = llm_summarize_section(weekly[:15], "本周 Top 新闻", api_key, base_url, llm_model)
-    if weekly_desc is None:
-        weekly_desc = []
-
-    summary_failed = (not today_desc) and (not weekly_desc)
-
-    print(f"   今日解读: {len(today_desc)} 条, 本周解读: {len(weekly_desc)} 条")
-    if summary_failed:
-        print("   ⚠️ 解读生成失败，将在卡片中加入提示（仅展示标题与链接）", file=sys.stderr)
-    elif len(today_desc) < len(today[:10]) or len(weekly_desc) < len(weekly[:15]):
-        print("   ⚠️ 部分解读缺失（JSON 截断已抢救），卡片将展示已有部分", file=sys.stderr)
-
-    token = get_token(feishu["appId"], feishu["appSecret"])
-    card = build_card(today[:10], weekly[:15], today_desc, weekly_desc, summary_failed=summary_failed)
-    send_card(token, receive_id, card)
+    write_output(text, args.output)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
