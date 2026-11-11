@@ -1,0 +1,23 @@
+{
+  "name": "hackernews-daily",
+  "version": "1.0.0",
+  "description": "Fetch Hacker News daily and weekly top stories, optionally generate Chinese summaries, and emit Markdown or JSON for any agent to deliver.",
+  "author": {
+    "name": "yobdcdoll",
+    "url": "https://github.com/yobdcdoll"
+  },
+  "homepage": "https://github.com/yobdcdoll/skills",
+  "repository": "https://github.com/yobdcdoll/skills",
+  "keywords": [
+    "hackernews",
+    "news",
+    "daily",
+    "digest",
+    "summary",
+    "markdown",
+    "json"
+  ],
+  "skills": [
+    "./"
+  ]
+}

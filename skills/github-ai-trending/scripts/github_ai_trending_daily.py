@@ -8,11 +8,11 @@ GitHub AI Trending 日报。
 发到哪个渠道、发给谁，由调用方（OpenClaw 或其他 agent）决定。
 
 用法:
-    python3 github_ai_trending_daily.py
-    python3 github_ai_trending_daily.py --format json
-    python3 github_ai_trending_daily.py --output /tmp/trending.md
+    python3 scripts/github_ai_trending_daily.py
+    python3 scripts/github_ai_trending_daily.py --format json
+    python3 scripts/github_ai_trending_daily.py --output /tmp/trending.md
     LLM_API_KEY=... LLM_BASE_URL=... LLM_MODEL=... \
-        python3 github_ai_trending_daily.py
+        python3 scripts/github_ai_trending_daily.py
 
 环境变量:
     LLM_API_KEY   OpenAI 兼容接口的 API key；三项齐全时才启用 AI 过滤

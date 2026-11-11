@@ -4,15 +4,15 @@
     "name": "yobdcdoll"
   },
   "metadata": {
-    "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, knowledge-point explainer videos, Bilibili publishing, and plugin releases.",
-    "version": "2.2.6"
+    "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, knowledge-point explainer videos, AI trending and Hacker News digests, Bilibili publishing, and plugin releases.",
+    "version": "2.2.7"
   },
   "plugins": [
     {
       "name": "yobdcdoll-skills",
       "source": "./",
-      "description": "All five skills bundled: exam restoration, GitHub IP diagnostics, knowledge-point explainer videos, Bilibili publishing, and one-command plugin releases.",
-      "version": "2.2.6",
+      "description": "All seven skills bundled: exam restoration, GitHub IP diagnostics, knowledge-point explainer videos, AI trending digests, Hacker News digests, Bilibili publishing, and one-command plugin releases.",
+      "version": "2.2.7",
       "author": {
         "name": "yobdcdoll"
       },
@@ -34,7 +34,11 @@
         "biliup",
         "upload",
         "publishing",
-        "cli"
+        "cli",
+        "trending",
+        "hackernews",
+        "news",
+        "digest"
       ]
     },
     {
@@ -125,6 +129,44 @@
         "commit",
         "push",
         "claude-code"
+      ]
+    },
+    {
+      "name": "github-ai-trending",
+      "source": "./skills/github-ai-trending",
+      "description": "Fetch GitHub Trending daily and weekly lists, filter AI/ML repositories, and emit Markdown or JSON for any agent to deliver.",
+      "version": "1.0.0",
+      "author": {
+        "name": "yobdcdoll"
+      },
+      "repository": "https://github.com/yobdcdoll/skills",
+      "keywords": [
+        "github",
+        "trending",
+        "ai",
+        "daily",
+        "digest",
+        "markdown",
+        "json"
+      ]
+    },
+    {
+      "name": "hackernews-daily",
+      "source": "./skills/hackernews-daily",
+      "description": "Fetch Hacker News daily and weekly top stories, optionally generate Chinese summaries, and emit Markdown or JSON for any agent to deliver.",
+      "version": "1.0.0",
+      "author": {
+        "name": "yobdcdoll"
+      },
+      "repository": "https://github.com/yobdcdoll/skills",
+      "keywords": [
+        "hackernews",
+        "news",
+        "daily",
+        "digest",
+        "summary",
+        "markdown",
+        "json"
       ]
     }
   ]

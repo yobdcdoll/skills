@@ -1,0 +1,23 @@
+{
+  "name": "github-ai-trending",
+  "version": "1.0.0",
+  "description": "Fetch GitHub Trending daily and weekly lists, filter AI/ML repositories, and emit Markdown or JSON for any agent to deliver.",
+  "author": {
+    "name": "yobdcdoll",
+    "url": "https://github.com/yobdcdoll"
+  },
+  "homepage": "https://github.com/yobdcdoll/skills",
+  "repository": "https://github.com/yobdcdoll/skills",
+  "keywords": [
+    "github",
+    "trending",
+    "ai",
+    "daily",
+    "digest",
+    "markdown",
+    "json"
+  ],
+  "skills": [
+    "./"
+  ]
+}

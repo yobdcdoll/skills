@@ -8,11 +8,11 @@ Hacker News 每日早报。
 发到哪个渠道、发给谁，由调用方（OpenClaw 或其他 agent）决定。
 
 用法:
-    python3 hackernews_daily.py
-    python3 hackernews_daily.py --format json
-    python3 hackernews_daily.py --output /tmp/hn.md
+    python3 scripts/hackernews_daily.py
+    python3 scripts/hackernews_daily.py --format json
+    python3 scripts/hackernews_daily.py --output /tmp/hn.md
     LLM_API_KEY=... LLM_BASE_URL=... LLM_MODEL=... \
-        python3 hackernews_daily.py
+        python3 scripts/hackernews_daily.py
 
 环境变量:
     LLM_API_KEY   OpenAI 兼容接口的 API key；三项齐全时才启用 AI 解读
