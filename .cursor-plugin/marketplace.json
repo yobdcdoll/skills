@@ -116,7 +116,7 @@
     {
       "name": "release-plugin",
       "source": "./skills/release-plugin",
-      "description": "Commit, push, and update the installed Claude Code plugin so the latest skills take effect.",
+      "description": "Run release checks, bump versions, commit, and push skill changes.",
       "version": "1.0.0",
       "author": {
         "name": "yobdcdoll"

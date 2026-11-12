@@ -7,7 +7,7 @@
 //        --skill release-plugin [--needle "some new text"] [--root <repo>]
 //
 // Exits 1 when the installed version, commit, skill version, or needle do not
-// match. Run this after `claude plugin update`.
+// match. Run this after the installed plugin has been updated.
 
 import fs from 'node:fs';
 import path from 'node:path';

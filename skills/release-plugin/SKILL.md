@@ -1,21 +1,21 @@
 ---
 name: release-plugin
-description: 把当前仓库的 skill 改动提交、推送，并更新 Claude Code（或当前 agent）已安装的插件，让最新内容立即可用。用户说“提交并推送”“更新插件”“让 Claude Code 用上最新 skill”“commit, push, update plugin”时使用；只提交代码或只发布普通软件包时不要用本技能。
+description: 把当前仓库的 skill 改动做发布前检查、版本 bump、提交并推送。用户说“提交并推送”“推送 skill 改动”“commit, push”时使用；不负责更新已安装的插件；只发布普通软件包时不要用本技能。
 metadata:
   version: 1.0.0
 ---
 
-# 发布 skill 改动并更新插件
+# 发布 skill 改动
 
-把仓库里的 skill 改动提交、推送，并让当前 agent（默认 Claude Code）加载最新插件。
+把仓库里的 skill 改动做发布前检查、版本 bump、提交并推送。已安装插件的更新与重启不在本技能范围内。
 
 ## 1. 何时使用
 
-- 用户要求“提交、推送，并更新插件/让 Claude Code 用上最新 skill”。
-- 改动落在本仓库的 `skills/<name>/` 下，且需要当前 agent 立即生效。
-- 用户只要求 commit / push，不要求更新插件：只做第 4、5 步，跳过第 6 步。
+- 用户要求提交并推送本仓库的 skill 改动。
+- 改动落在本仓库的 `skills/<name>/` 下，需要进入远端仓库。
+- 用户只要求 commit 或只要求 push：做对应步骤，其余跳过。
 
-不适用：普通应用代码发布、只改 README、只发 npm/PyPI 包。
+不适用：更新已安装插件、重启 agent；普通应用代码发布、只改 README、只发 npm/PyPI 包。
 
 ## 2. 发布前检查
 
@@ -53,7 +53,7 @@ node <skill>/scripts/bump_versions.mjs --skill <name>
 node <skill>/scripts/bump_versions.mjs --skill <name> --skill-version 1.4.0 --bundle-version 2.3.0
 ```
 
-> 只改 skill 版本不够。`claude plugin update` 比较的是**插件包版本**；包版本没变，它会说 “already at the latest version”，新 skill 不会进入安装缓存。
+> 只改 skill 版本不够。安装端按**插件包版本**判断是否有新版本；包版本没变，新 skill 不会被视为一次更新。
 
 ## 4. 提交
 
@@ -82,29 +82,11 @@ EOF
 git push origin "$(git branch --show-current)"
 ```
 
-推送后再刷新 marketplace；未推送的提交不会进入插件的 marketplace clone。
+未推送的提交不会进入任何安装端或 marketplace clone。
 
-## 6. 更新当前 agent 的插件（Claude Code）
+## 6. 验证（可选）
 
-先刷新 marketplace，再更新插件：
-
-```bash
-claude plugin marketplace update <marketplace>
-claude plugin update <plugin>@<marketplace>
-```
-
-本仓库默认值：
-
-```bash
-claude plugin marketplace update skills
-claude plugin update yobdcdoll-skills@skills
-```
-
-- `marketplace update` 可能要 1–2 分钟；超时就放后台，**不要并行开第二个**。
-- 看到 “already at the latest version”：回到第 3 步，确认插件包版本真的 bump 了、推送成功、marketplace clone 已包含新提交。
-- 更新完成会提示 **restart required**；告诉用户需要重启 agent 才能加载。
-
-## 7. 验证
+如需核对安装缓存与本仓库是否一致（前提是安装端已拉到本次提交）：
 
 ```bash
 node <skill>/scripts/verify_install.mjs \
@@ -119,28 +101,27 @@ node <skill>/scripts/verify_install.mjs \
 - 安装目录里 `skills/<name>/SKILL.md` 的版本 = 仓库版本；
 - 新改动确实出现在安装缓存里（例如 grep 新增的小节或关键词）。
 
-任一项不匹配，先修发布流程，不要只说“已完成”。
+任一项不匹配时，先确认是仓库、HEAD 还是安装缓存旧；安装缓存落后时请用户更新插件，再重跑验证。
 
-## 8. 失败处理
+## 7. 失败处理
 
 | 现象 | 处理 |
 | --- | --- |
-| `plugin update` 说已是最新 | 插件包版本没 bump，或 push 没成功，或 marketplace 没刷新 |
-| marketplace clone 里没有新提交 | 检查 `git push`、远端分支、`claude plugin marketplace update` 输出 |
-| 安装缓存有旧版本 | 用 `claude plugin update` 重装；必要时 `claude plugin uninstall` 后再 install |
-| 验证脚本报版本不一致 | 先确认仓库版本、HEAD、安装版本三者哪一个是旧的，再重跑第 6 步 |
-| 用户只要 commit / push | 跳过第 6、7 步，明确说明“插件未更新” |
+| 远端没有新提交 | 检查 `git push` 输出、远端分支、网络与凭证 |
+| 安装缓存有旧版本 | 属于插件更新环节；提示用户更新后再验证，本技能不代为更新 |
+| 验证脚本报版本不一致 | 先确认仓库版本、HEAD、安装版本三者哪一个是旧的；安装版本落后时请用户更新插件 |
+| 用户只要 commit / push | 做到对应步骤即可，明确说明“插件未更新” |
 
-## 9. 快速流程
+## 8. 快速流程
 
 ```bash
 node <skill>/scripts/bump_versions.mjs --skill <name>
 # 跑测试 / 校验
 git add <files> && git commit -m "..."
 git push origin main
-claude plugin marketplace update skills
-claude plugin update yobdcdoll-skills@skills
+
+# 可选：用户更新插件后核对安装缓存
 node <skill>/scripts/verify_install.mjs --plugin yobdcdoll-skills@skills --skill <name>
 ```
 
-最后报告：提交号、推送结果、插件新旧版本、是否需要重启。
+最后报告：提交号、推送结果。

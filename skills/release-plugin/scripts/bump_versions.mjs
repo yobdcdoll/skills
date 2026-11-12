@@ -8,7 +8,7 @@
 //   ... --dry-run
 //
 // Defaults: patch bump both versions. Updates every manifest Claude Code and
-// Cursor read, so `claude plugin update` actually sees a new bundle version.
+// Cursor read, so installers see a new bundle version.
 
 import fs from 'node:fs';
 import path from 'node:path';

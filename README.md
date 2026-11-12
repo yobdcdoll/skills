@@ -12,7 +12,7 @@
 | `github-ai-trending` | 抓取 GitHub Trending，过滤 AI 项目并按本期新增星排序，输出 Markdown/JSON（只取数，不发送） |
 | `hackernews-daily` | 抓取 Hacker News 今日/本周热门，可选中文解读，输出 Markdown/JSON（只取数，不发送） |
 | `biliup` | 用 biliup CLI 登录、上传、查询和管理 B 站稿件；支持频控处理与 README 链接回填（需本机 biliup 与 B 站登录） |
-| `release-plugin` | 提交、推送并更新已安装插件，让最新 skill 立即生效 |
+| `release-plugin` | 发布前检查、bump 版本、提交并推送 skill 改动（不负责更新已安装插件） |
 
 ## Claude Code
 
