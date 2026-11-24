@@ -13,6 +13,8 @@ cues.json             # 每段的句级时间码（段内相对）
 
 `scene.html` 还需要 `scene-data.js`（`window.TIMELINE`）、`cues.js`（`window.CUES`）、`subtitles.js`（`window.SUBTITLES`）。
 
+**改旁白后必须重建三份画面数据。** `build_audio.py` 会重写 `timeline.json`、`scene-data.js`、`cues.json`，但不会写 `cues.js`；如果只重跑音频和字幕，画面仍按旧时间码走，会出现“说得对、亮得错”的音画错位。每次改旁白后同步生成 `cues.js`（`window.CUES=` + `cues.json`），再跑版面检查和渲染。
+
 ## 2. `timeline.json`
 
 ```json

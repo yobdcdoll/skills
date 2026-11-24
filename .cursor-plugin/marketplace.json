@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Reusable agent skills for exam restoration, GitHub network diagnostics, knowledge-point explainer videos, AI trending and Hacker News digests, Bilibili publishing, and plugin releases.",
-    "version": "2.2.7"
+    "version": "2.2.8"
   },
   "plugins": [
     {
       "name": "yobdcdoll-skills",
       "source": "./",
       "description": "All seven skills bundled: exam restoration, GitHub IP diagnostics, knowledge-point explainer videos, AI trending digests, Hacker News digests, Bilibili publishing, and one-command plugin releases.",
-      "version": "2.2.7",
+      "version": "2.2.8",
       "author": {
         "name": "yobdcdoll"
       },
@@ -79,7 +79,7 @@
       "name": "gen-knowledge-video",
       "source": "./skills/gen-knowledge-video",
       "description": "Turn any knowledge point or skill into a self-study explainer video with narration, cue-aligned visuals, and subtitles.",
-      "version": "1.3.9",
+      "version": "1.4.0",
       "author": {
         "name": "yobdcdoll"
       },
